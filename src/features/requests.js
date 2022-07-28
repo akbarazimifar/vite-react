@@ -1,0 +1,1 @@
+export const userApi = 'http://localhost:3001/api/user'
