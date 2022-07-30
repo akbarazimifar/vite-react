@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useCallback } from 'react'
 
 import './App.css'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom'
 import Home from './pages/index.jsx'
 import Register from './pages/register'
 import Lobby from './pages/lobby'
@@ -25,6 +25,7 @@ function App() {
       user
   } = userState
 
+
   const dispatch = useDispatch()
   
   let newMessage = useMemo(() => {
@@ -41,7 +42,7 @@ function App() {
 
   const logoutNow = useCallback(() => {
       dispatch(logout())
-      navigate('/')
+      window.location.href='/'
   }, [])
 
 

@@ -1,11 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-body {
-  padding:0px;
-  margin:0px;
-  box-sizing: border-box;
-}
+html, body { height: 100%; width: 100%; margin: 0px; }
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
@@ -17,4 +13,64 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+}
+
+.video-container {
+  height:200px;
+  
+}
+
+.user-video .agora_video_player {
+  cursor: pointer;
+  align-items: center;
+  overflow: hidden;
+  background-image: url('./static/reyna.jpg');
+  background-size: 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.video-container > div{
+  border-radius: 50%;
+  width:100% !important;
+  height:100% !important;
+}
+
+#spotlight {
+  /* height:50vh !important; */
+  width:100%;
+  position: relative;
+}
+
+#spotlight .agora_video_player {
+  background-color: black;
+  background-image: none;
+}
+
+#spotlight  small {
+  display:none;
+}
+
+#spotlight .video-container {
+  border:0px solid transparent;
+  width:100%;
+  height: 50vh !important;
+  background-position: center;
+  background-size: 100% !important;
+}
+
+#spotlight video {
+  height: 50vh !important;
+  background-position: center;
+  background-size: 100% !important;
+}
+
+
+
+#spotlight .video-container > div{
+  background-color: none !important;
+  background-size: 100%;
+  width:100%;
+  height:100%;
+  border-radius:0px !important;
 }

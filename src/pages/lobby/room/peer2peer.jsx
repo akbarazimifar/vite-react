@@ -19,6 +19,7 @@ function Room() {
     const AGORA_APP_ID = "4b3a1d46ac90441c840669b7f31417bb"
     let token = null 
     let [uid, setUid] = useState(String(Math.floor(Math.random() * 10000))) // My uniqie ID for Peering, later it will be the USER LOGGED ID
+    
     let client
     let channel // Room that will users can join
 

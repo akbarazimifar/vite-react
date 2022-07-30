@@ -1,398 +1,664 @@
 import React, { useCallback, useState, useEffect, useMemo } from 'react'
 import { useSelector } from 'react-redux'
-import {FaMicrophone, FaCamera, FaMicrophoneAltSlash} from 'react-icons/fa'
+import { FaThumbsUp, FaThumbsDown, FaMicrophone, FaCamera, FaMicrophoneAltSlash, FaRegTimesCircle, FaRegGrinStars} from 'react-icons/fa'
+import { MdOutlineScreenShare, MdOutlineStopScreenShare } from 'react-icons/md'
 //Agora SDK for our Realtime Connection
 import '../../../assets/agora-rtm-sdk-1.4.5'
 
 
+//Agora for Video Call
+import '../../../assets/AgoraRTC_N-4.13.0'
+import { setMessage } from '../../../features/user/userSlice'
+
+// Constant vars
+// RTC
+let localTracks = []
+let localScreenTracks = null
+let client = null
+
+// RTM
+let rtmClient
+let channel
+
+
+// Controls
+// let isShareScreen = null
+// let userSpot = null
 
 function Room() {
 
     const userState = useSelector(state => state.user)
     const {
-        user
+        user,
     } = userState
-
     
+    
+    try {
+        let s = user.id
+    } catch (err) {
+        window.location.href = '/'
+    }
 
     // My devices
-    const [camera, setCamera] = useState(true)
-    const [audio, setAudio] = useState(false)
+    const [cameraMuted, setCamera] = useState(false)
+    const [audioMuted, setAudio] = useState(true)
 
-    // FOR AGO VARS
-    const AGORA_APP_ID = "4b3a1d46ac90441c840669b7f31417bb"
+
+    // FOR AGORA VARS
+    const AGORA_APP_ID = "4b3a1d46ac90441c840669b7f31417bb" // RTC
+    const RTM_ID = '4b3a1d46ac90441c840669b7f31417bb'
     const token = null 
-    const [uid, setUid] = useState(user.username) // My uniqie ID for Peering, later it will be the USER LOGGED ID
-    let client
-    let channel // Room that will users can join
-    const [roomMembers, setMembers] = useState([user.username])
-    
-    // FOR WEB RTC VARS
-    let [localStream, setlocalStream] = useState(null) // my camera and audio
-    let remoteStream // once connected to other user we can remote their media data
-    let peerConnection // will stored all information to all connected users
+    const [uid, setUid] = useState(user.id) // My uniqie ID for Peering, later it will be the USER LOGGED ID
+    let rtmUid = String(`${user.username}-${user.id}`)
+    // Media
+    let [remoteUsers, setremoteUsers] = useState({})
 
-    // Servers that we will used to handle our peer connections, so we dont need to create our own
-    const STUNservers = {
-        iceServers: [
-            {
-                urls: [
-                    'stun:stun1.l.google.com:19302', 
-                    'stun:stun2.l.google.com:19302'
-                ]
-            }
-        ]
-    }
-    
-    let devicePermission = async () => {
-        localStream = await navigator.mediaDevices.getUserMedia({
-            audio: audio,
-            video: camera
-        })
+    // Controls
+    let [userSpot,  setSpot] = useState()
+    let [isShareScreen, setShareScreen] = useState(null)
 
-        console.warn(localStream)
+    let [allowControl, setAllowControl] = useState(0)
 
-        // Initiate my Media to my page
-        addNewVideo(roomMembers[0])
-        document.getElementById(roomMembers[0]).srcObject = localStream
-        
-    }
 
     console.log("TANGINA MO REACT")
 
-    let init = useCallback(async () => {
+    let init = async () => {
         // -------- STEP 1 ---------
         //Get current room
         const params = new URLSearchParams(window.location.search)
         const roomID = params.get("id")
 
-        // loopVideos()
-        
-        //Get recent room
-        // let recentRoom = localStorage.getItem('recentRoom')
-        // if  (recentRoom != roomID) {
-        //     localStorage.setItem('roomMembers', JSON.stringify([]))
-        // }
+        // RTM Instance
+        const rtmInstance = async () => {
+            
+            rtmClient = await AgoraRTM.createInstance(AGORA_APP_ID)
+            await rtmClient.login({
+                uid: rtmUid, token
+            })
 
-        // localStorage.setItem('recentRoom', roomID)
+            // Room with uniqe room ID
+            channel = await rtmClient.createChannel('chat-'+roomID)
+            await channel.join()
 
-        
-        //Request permission to my devices
-        await devicePermission()
+            console.error(rtmClient)
 
-        //Initiate myself to Agora to create client object
-        client = await AgoraRTM.createInstance(AGORA_APP_ID)
-        await client.login({
-            uid, token
-        })
+            //Listen to users joined
+            channel.on('MemberJoined', rtmHandleUserJoined)
+            
+            // Listen for the user left
+            channel.on('MemberLeft', rtmHandleUserLeft)
 
-        // Room with uniqe room ID
-        channel = client.createChannel(roomID)
-        await channel.join()
+            // Listen to all messages from the room
+            channel.on('ChannelMessage', rtmHandleMessageFromPeer)
 
-        // Get cached member 
-        // try {
-        //     let members = JSON.parse(localStorage.getItem('roomMembers'))
-        //     if (members.length == 0) {
-        //         setMembers([user.username, ...await channel.getMembers()])
-        //     } else {
-        //         setMembers([...members])
-        //     }
-        // } catch (err) {
-        //     setMembers([user.username])
-        //     localStorage.setItem('roomMembers', JSON.stringify(roomMembers))
-        // }
+            window.addEventListener('beforeunload', async () => {
+                await rtmClient.logout()
+                await channel.leave()
+            })
+        }
 
-        let members = await channel.getMembers()
-        console.warn("INITIAL MEMBERS: ", members)
+        // RTC Instance
+        const rtcInstance = async () => {
+            
+            client = await AgoraRTC.createClient({
+                mode:'rtc', codec:'vp8'
+            })
+            
+            await client.join(AGORA_APP_ID, roomID,  token, uid)
+            // Listen for other users join in that room
+            client.on('user-published', handleUserPublished)
 
-        
-        
-        //Listen to users joined
-        channel.on('MemberJoined', handleUserJoined)
+            // Listen for the user left
+            client.on('user-left', handleUserLeft)
+        }
 
-        // Listen for the user left
-        channel.on('MemberLeft', handleUserLeft)
+        await rtmInstance()
 
-        // Listen to all messages from the room
-        client.on('MessageFromPeer', handleMessageFromPeer)
-    }, [])
+        await rtcInstance()
 
-    let handleUserJoined = async (MemberID) => {
-        console.log("New user joined to AGORA room: ", MemberID)
-        console.warn("PUMASOK: ", MemberID)
-
-        // updateUserlist
-        // updateMembers(MemberID)
-        
-        // push new member
-        setMembers(await channel.getMembers())
-        
-        //Pass new Joined Member ID
-        createOffer(MemberID)
+        joinStream()
     }
 
-    let handleMessageFromPeer = useCallback(async (message, senderID) => {
-        message = JSON.parse(message.text) // New message from new member of the room
-        console.warn(`${message.type} Message : `, message)
-
-        // TEST
-        if(message.type === 'offer') {
-            // -------- STEP 3 ---------
-            await createAnswer(senderID, message.offer)
-        }
-
-        // Will Listen by whose offer 
-        if(message.type === 'answer') {
-            // -------- STEP 4 ---------
-            sendMyFinalAnswer(message.answer)
-        }
-
-        // Will Listen by all, then Setup the final peer
-        if(message.type === 'candidate') {
-            // -------- STEP 5 ---------
-            if (peerConnection) {
-                //Then now add to the candidate category means stablished users
-                peerConnection.addIceCandidate(message.candidate)
-                console.warn("FINAL MEMBERS: ", roomMembers)
+    const joinStream = async () => {
+        // Agora ask for my device
+        localTracks = await AgoraRTC.createMicrophoneAndCameraTracks({}, {
+            encoderConfig: {
+                width: {
+                    min: 640, ideal: 1920, max: 1920
+                },
+                height:{ 
+                    min: 480, ideal:1080, max: 1080
+                }
             }
-        }
-    }, [])
-
-    let handleUserLeft = useCallback(async (MemberId) => {
-        console.warn("UMALIS: ", MemberId)
-        document.getElementById(MemberId + '-root').style.display = 'none'
-        setMembers(roomMembers.filter(member => member != MemberId))
-        
-        //localStorage.setItem('roomMembers', JSON.stringify(roomMembers))
-    }, [])
-
-    let updateMembers = async () => {
-        let members = await channel.getMembers()
-        console.warn(members)
-        setMembers(members)
-        // loopVideos()
-    }
-
-    let createPeerConnection = useCallback(async (MemberID) => {
-        // updateMembers()
-        addNewVideo(MemberID)
-        // To make sure localStream is activated before to connect to RTCPeer
-        if(!localStream) {
-            //Request permission to my devices
-            localStream = await navigator.mediaDevices.getUserMedia({
-                audio: true,
-                video: true
-            })
-        }
-
-        //I Start to connect as new Candidate in RTC
-        peerConnection = new RTCPeerConnection(STUNservers)
-
-        
-        //Get other user Media connected
-        
-        remoteStream = new MediaStream()
-        console.error(MemberID)
-        document.getElementById(MemberID).srcObject = remoteStream
-
-        //Get my localTracks or Media datas and loop to send it to RTCPeerConnection
-        localStream.getTracks().forEach(track => {
-            //Push to RTCPeerConnection to received by others
-            peerConnection.addTrack(track, localStream)
         })
 
+        // Initiate my own Video container
+        addNewVideo(uid)
+        await localTracks[1].play(`user-${uid}`)
 
-        // Listen to all connected by getting their tracks or media data
-        peerConnection.ontrack = event => {
-            event.streams[0].getTracks().forEach(track => {
-                remoteStream.addTrack(track)
-            })
+
+        // Publish my local tracks to trigger the user-published
+        await client.publish([localTracks[0], localTracks[1]])
+
+        // Default device state
+        await localTracks[1].setMuted(false)
+        await localTracks[0].setMuted(true)
+        
+        // Toggle listener
+        document.getElementById('btn-cam').addEventListener('click', e => {
+            changeCamera()
+            setCamera(localTracks[1].muted)
+        })
+
+        document.getElementById('btn-audio').addEventListener('click', e => {
+            changeAudio()
+            setAudio(localTracks[0].muted)
+        })
+
+        // document.getElementById('btn-screen').addEventListener('click', e => {
+        //     toggleScreen(e)
+        // })
+    }
+
+    // Handlers
+    const handleUserPublished = async (user, mediaType) => {
+        
+        // Store the user information
+        setremoteUsers({...remoteUsers, [user.uid]: user})
+
+        // Accept user to the peer chat
+        await client.subscribe(user, mediaType)
+
+        // Create video container for the new user
+        addNewVideo(user.uid)
+
+        // live stream to other need to fix
+        if (mediaType === 'video') {
+            user.videoTrack.play(`user-${user.uid}`)
         }
 
-        // When someone or me connected I get it from on the STUN servers
-        peerConnection.onicecandidate = async event => {
-            if (event.candidate) {
-                // console.log("New ICE Candidate: ", event.candidate)
-                //Send my OFFER to all connected users into the room as new CANDIDATE - Agora
-                const newCandidate = JSON.stringify({
-                    type: 'candidate', candidate: event.candidate,
+
+        // if share screen
+        if (mediaType === 'video' && isShareScreen) {
+            user.videoTrack.play(isShareScreen)
+           
+        }
+
+
+        if (mediaType === 'audio') {
+            user.audioTrack.play()
+        }
+    }
+
+    let handleUserLeft = async (user) => {
+        // Delete the user for the participants variable
+        let users = remoteUsers
+        delete users[user.uid]
+        setremoteUsers(users)
+
+        // Delete the user video container
+        document.getElementById(`user-container-${user.uid}`).remove()
+    }
+
+    //RTM
+
+    const rtmHandleUserJoined = async (MemberID) => {
+
+    }
+    
+    const rtmHandleUserLeft = async (MemberID) => {
+        console.warn(`${MemberID} was left`)
+    }
+
+    //DOME ACTIONS
+    const openSpotlightDom = videoId => {
+        //if(!videoId) alert("WALANG VIDEO ID: ", videoId)
+        userSpot = videoId
+        let spotlight = document.getElementById('spotlight')
+        spotlight.style.height = '50vh !important'
+
+        let child = spotlight.firstElementChild
+        if (child) {
+            document.getElementById('videos').appendChild(child)
+        }
+
+        // get the user video element then display to all
+        let videoElement = document.getElementById(videoId)
+        spotlight.appendChild(videoElement)
+    }
+
+    const closeShareScreenDom = useCallback(() => {
+        let spotlight = document.getElementById('spotlight')
+        spotlight.innerHTML = ''
+        spotlight.style.height = '0px !important'
+        let userVideo = document.getElementById(userSpot)
+        
+        if (!userVideo && `user-container-${uid}` !== userSpot) {
+            //alert("WALANG LAMAN: " + userSpot)'
+            let recentSharer = userSpot.split('-')
+            recentSharer = recentSharer[recentSharer.length-1]
+            addNewVideo(recentSharer)
+            
+        }  else {
+            spotlight.insertAdjacentElement('beforeend', userVideo)
+        }
+        
+        isShareScreen = null
+    }, [userSpot])
+
+    const closeSpotLightDom = () => {
+        let spotlight = document.getElementById('spotlight')
+        let child = spotlight.firstElementChild
+        if (child) {
+            document.getElementById('videos').appendChild(child)
+        }
+        spotlight.style.height = '0px !important'
+        userSpot = null
+    }
+
+    const setShareScreenDom = (memberID) => {
+        let child = spotlight.firstChild
+        if(child && userSpot && !isShareScreen) {
+            document.getElementById('videos').appendChild(child) 
+        }
+        
+        spotlight.style.height = '50vh !important'
+
+
+        spotlight.innerHTML = `
+            <div key="${memberID}" id="user-container-${memberID}" class='text-center user-video' >
+                <div class='video-container aspect-square w-50 bg-purple-300 border-2 border-purple-700 rounded-full' id="user-sharescreen-${memberID}" >
+                </div>
+            </div>
+        `
+
+            
+        userSpot = 'user-container-' + memberID
+        isShareScreen = `user-sharescreen-${memberID}`
+        
+
+    }
+    
+    const rtmHandleMessageFromPeer = async (message, MemberID) => {
+        message = JSON.parse(message.text)
+        
+        console.warn("MAY NAG MESSAGE ", message)
+        if (message.type === 'spotlight') {
+            openSpotlightDom(message.videoId)
+        }
+
+        if (message.type === 'close-spotlight') {
+            closeSpotLightDom()
+        }
+
+
+        if (message.type === 'sharescreen') {
+            setShareScreen(`user-sharescreen-${message.uid}`)
+            isShareScreen = `user-sharescreen-${message.uid}`
+
+            userSpot = `user-container-${message.uid}`
+            setSpot(`user-container-${message.uid}`)
+
+            setShareScreenDom(message.uid)
+        }
+
+        if (message.type === 'close-sharescreen') { //userVideo
+            //alert("may na close")
+
+            setShareScreen(null)
+            isShareScreen = null
+
+            userSpot = message.userSpot
+            setSpot(message.userSpot)
+
+            closeShareScreenDom()
+
+            // document.getElementById(userSpot).remove()
+            
+        }
+
+        // set control
+    }
+
+    let setSpotlight = useCallback(async (e) => {
+
+        if(!allowControl) {
+            return alert("Unable to control spotlight: " + e.currentTarget.id)
+        } 
+
+        if(isShareScreen) {
+            return alert("Someone presenting")
+        }
+
+        const userVideoId = e.currentTarget.id
+        
+        const newMessage = JSON.stringify({
+            type: 'spotlight', videoId: userVideoId,
+        })
+        rtmClient.sendMessageToPeer({
+            text: newMessage
+        }, rtmUid)
+
+    }, [allowControl, isShareScreen])
+
+    // Close spotlight
+    const closeSpotlight = useCallback(() => {
+        // ONly me can close my own spotligth
+        console.log(userSpot)
+        if(userSpot === `user-container-${uid}`) {
+            const userVideoId = userSpot
+            const newMessage = JSON.stringify({
+                type: 'close-spotlight', videoId: userVideoId,
+            })
+
+            channel.sendMessage({
+                text: newMessage
+            })
+
+            closeSpotLightDom()
+            setSpot(null)
+            console.log(userSpot)
+        }
+        
+    }, [isShareScreen, userSpot])
+
+    // Set me as spotlight 
+    const setMeSpot = useCallback(() => {
+
+        if (isShareScreen) {
+            return alert("Someone presenting")
+        }
+
+        if(userSpot && userSpot != `user-container-${uid}`) {
+            return alert("Someone presenting")
+        }
+
+        const userVideoId = `user-container-${uid}`
+        const newMessage = JSON.stringify({
+            type: 'spotlight', videoId: userVideoId,
+        })
+        channel.sendMessage({
+            text: newMessage
+        })
+
+        setSpot(`user-container-${uid}`)
+
+        openSpotlightDom(userVideoId)
+    }, [userSpot])
+
+
+    const changeAudio = async (e) => {
+        await localTracks[0].setMuted(!localTracks[0].muted)
+    }
+
+    const changeCamera = async (e) => {
+        await localTracks[1].setMuted(!localTracks[1].muted)
+    }
+
+    let toggleScreen = async (e) => {
+        
+        // Start to insert Screen sharing video element
+        if(userSpot && userSpot !== `user-container-${uid}`) {
+            return alert("MAG PAALAM KA MUNA")
+        }
+
+        if (isShareScreen === `user-sharescreen-${uid}`) {
+            //alert("mag cloclose")
+            // Close sharescreen
+            closeShareScreenDom()
+
+           
+            setShareScreen(null)
+            isShareScreen = null
+
+            userSpot = `user-container-${uid}`
+            setSpot(`user-container-${uid}`)
+
+            
+            channel.sendMessage({
+                text: JSON.stringify({
+                    type: 'close-sharescreen',
+                    userSpot: userSpot,
                 })
-                client.sendMessageToPeer({
-                    text: newCandidate
-                }, MemberID) // MemberID the sender
-            }
+            })
+
+            // Kill sharescreen
+            await client.unpublish([localScreenTracks])
+
+            // Reinitiate my camera and play to all users
+            addNewVideo(uid)
+            await localTracks[1].play(`user-${uid}`)
+
+            // Publish my local tracks to trigger the user-published
+            await client.publish([localTracks[0], localTracks[1]])
+
+            //alert("na closed")
+            return 
         }
-        
-    }, [])
 
-    //RTC Flow | 
-    // 1. Enable my LocalStream, to run MediaDevice to RTCPeer
-    // 2. Create my offer
-    // 3. Send my offer to users connected to RTCPeer
-    // 4. Recieved the answer from the users that I send my offer
-    // 5. Then Send my final answer too to the users that accept my offer to be Candidate in the RTCPeer.
+        if (!isShareScreen) {
+            //alert("mag shshare")
+            setShareScreenDom(uid)
+            
+            await client.unpublish();
+            
+            localScreenTracks = await AgoraRTC.createScreenVideoTrack()
+            localScreenTracks.play(isShareScreen)
+            
+            // Share screen and video
+            await client.publish([localScreenTracks])
+
+            setShareScreen(`user-sharescreen-${uid}`)
+            isShareScreen = `user-sharescreen-${uid}`
+
+            userSpot = `user-container-${uid}`
+            setSpot(`user-container-${uid}`)
+
+            channel.sendMessage({text: JSON.stringify({
+                type:'sharescreen', uid: uid, 
+            })})
 
 
-    // Create offer for other connected users
-    let createOffer = useCallback(async (MemberID) => {
-        // -------- STEP 2 ---------
-        await createPeerConnection(MemberID)
+            // Reinitiate my camera and play to all users
+            addNewVideo(uid)
+            await localTracks[1].play(`user-${uid}`)
 
-        // Create my actual offer 
-        let offer = await peerConnection.createOffer() 
-      
-        // This my offer and now Each connection will now have offer and answer
-        // then it will trigger the onicecandidate above
-        await peerConnection.setLocalDescription(offer) // Each user need own setLocalDescription
-        console.log('Offer: ', offer)
-        
-        //Send my OFFER to all connected users into the room as new Member - Agora
-        const newMemberOffer = JSON.stringify({
-            type: 'offer', offer,
-        })
-        client.sendMessageToPeer({
-            text: newMemberOffer
-        }, MemberID) // MemberID the sender
-    }, [])
+            // Publish my local tracks to trigger the user-published
+            await client.publish([localTracks[0], localTracks[1]])
 
-    // Creating My Answer for someone offer
-    let createAnswer = useCallback(async (MemberID, offer) => {
-        // -------- STEP 3 ---------
-        // Create peer connection for someone OFFER to watch them in my page
-        await createPeerConnection(MemberID)
 
-        // Then set the offer Media data from RPCConnection server to run in my web page
-        await peerConnection.setRemoteDescription(offer) // Like accepting an offer
-
-        // then GET my own ANSWER 
-        let answer = await peerConnection.createAnswer()
-        
-        // then submit my answer to fully stablish the PeerConnection between me and those offer
-        await peerConnection.setLocalDescription(answer)
-        
-        //Send my ANSWER to all connected users into the room 
-        const myAnswerForTheOffer = JSON.stringify({
-            type: 'answer', answer,
-        })
-        client.sendMessageToPeer({
-            text: myAnswerForTheOffer
-        }, MemberID) // MemberID the sender
-    }, [])
-
-    // -------- STEP 4 ---------
-    let sendMyFinalAnswer = useCallback(async (someoneAnswer) => {
-        // If I didnt Peered or connected to the users as candidate 
-        if (!peerConnection.currentRemoteDescription) {
-            // Run their media to my web page
-            await peerConnection.setRemoteDescription(someoneAnswer) 
+            return 
         }
-    }, [])
+    }
 
-    // If I leave
-    const leaveChannel = useCallback(async () => {
-        await channel.leave()
-        await client.logout()
-    }, [])
 
+
+
+    const switchToCamera = async (member) => {
+        console.warn('SWITCH TO CAM: ', member)
+
+        setCamera(false)
+        changeCamera()
+        let userVideoContainer = document.getElementById(member)
+        let spotlight = document.getElementById('spotlight')
+        spotlight.style.height = '50vh !important'
+        
+        spotlight.appendChild(userVideoContainer)
+        
+        await client.publish([localTracks[0], localTracks[1]])
+
+        
+    }
+
+    const loadVideoEvents = useCallback(() => {      
+        let videos = document.getElementsByClassName('user-video')  
+        for(let i = 0; videos.length > i; i++) {
+            videos[i].onclick = setSpotlight
+        }
+    }, [remoteUsers])
+
+
+    // Loaders 
     useEffect(() => {
-        console.log("INIT")
         init()
     }, []) 
 
-    
-    window.addEventListener('boforeunload', leaveChannel)
+    useEffect(() => {
+        loadVideoEvents()
+    }, [allowControl])
 
-    const changeAudio = useCallback(async (e) => {
-        localStream.getAudioTracks()[0].enabled = !localStream.getAudioTracks()[0].enabled
-        updateAudio(localStream.getAudioTracks()[0].enabled)
-    }, [localStream])
-
-    const changeCamera = useCallback(async (e) => {
-        let videoTrack = localStream.getTracks().find(track => track.kind === 'video')
-        console.log(videoTrack)
-        videoTrack.enabled = !videoTrack.enabled
-        updateCamera(videoTrack.enabled)
-    }, [localStream])
-
-    const updateCamera = useCallback((state) => {
-        setCamera(state)
-    }, [camera])
-
-    const updateAudio = useCallback((state) => {
-        setAudio(state)
-    }, [audio])
-    
-
-    const audioState = useMemo(() => {
-        return audio ? <FaMicrophoneAltSlash/> : <FaMicrophone/>
-    }, [audio])
 
 
     // Dynamic video element
-
-    const participantsVideo = useMemo(() => {
-        return roomMembers.map(member => {
-            return (
-                <div key={member} className='border rounded w-1/3 h-50 text-center'>
-                    <video  className='w-full h-full bg-purple-300' id={member} autoPlay playsInline>
-                    </video>
-                    <small className='text-sm text-purple-500'>{member}</small>
-                </div>
-            )
-        })
-    },[roomMembers])
-
-
-    const loopVideos = async () => {
+    const addNewVideo = async (member) => {
+        let video = document.getElementById(`user-container-${member}`)
         let videos = document.getElementById('videos')
-        videos.innerHTML = ''
-        roomMembers.forEach(member => {
+        if (video == null) {
             videos.insertAdjacentHTML('beforeend', `
-                <div key="${member}" id="${member}-root" class='border rounded w-1/3 h-50 text-center'>
-                    <video  class='w-full h-full bg-purple-300' id="${member}" autoPlay playsInline>
-                    </video>
-                    <small class='text-sm text-purple-500'>${member}</small>
-                </div>
-            `)
-        })
-    }
-
-    const addNewVideo = useCallback(async (member) => {
-        let video = document.getElementById(member)
-        if(!roomMembers.find(member => member === member) || !video) {
-            let videos = document.getElementById('videos')
-            videos.insertAdjacentHTML('beforeend', `
-                <div key="${member}" class='border rounded w-1/3 h-50 text-center'>
-                    <video  class='w-full h-full bg-purple-300' id="${member}" autoPlay playsInline>
-                    </video>
-                    <small class='text-sm text-purple-500'>${member}</small>
+                <div key="${member}" id="user-container-${member}" class='text-center user-video' >
+                    <div class='video-container aspect-square w-50 bg-purple-300 border-2 border-purple-700 rounded-full' id="user-${member}" >
+                    </div>
+                    <small class='text-sm text-purple-500'>${member == uid ? 'You' : member}</small>
                 </div>
             `)
         }
-        
-    },[])
+    }
 
+    let spotlightToggle = useMemo(() => {
+
+        if (isShareScreen) {
+            return (
+                <button onClick={setMeSpot} className=' shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3'>
+                    <FaRegGrinStars />
+                </button>
+            )
+        }
+        
+        if(!userSpot) {
+            return (
+                <button onClick={setMeSpot} className=' shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3'>
+                    <FaRegGrinStars />
+                </button>
+            )
+        }
+
+        if (userSpot !== `user-container-${uid}`) {
+            return (
+                <button onClick={setMeSpot} className=' shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3'>
+                    <FaRegGrinStars />
+                </button>
+            )
+        }
+
+        return (
+            <button onClick={closeSpotlight} className=' shadow-purple-400 rounded text-white  bg-purple-700 p-3'>
+                <FaRegGrinStars />
+            </button>
+        )
+       
+    }, [userSpot])
+
+
+    let shareScreenToggle = useMemo(() => {
+
+        if (!isShareScreen) {
+            return (
+                <button onClick={toggleScreen} className=' shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3'>
+                    <MdOutlineStopScreenShare />
+                </button>
+            )
+        }
+
+        if (isShareScreen !== `user-sharescreen-${uid}`) {
+            return (
+                <button onClick={toggleScreen} className=' shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3'>
+                    <MdOutlineStopScreenShare />
+                </button>
+            )
+        }
+
+        return (
+            <button onClick={toggleScreen} className=' shadow-purple-400 rounded text-white border-2 border-purple-700 bg-purple-700 p-3'>
+                <MdOutlineScreenShare />
+            </button>
+       )
+    }, [isShareScreen])
+
+
+    let allowAllSpotlightControl = useMemo(() => {
+        if(uid.username !== 'marktomarse@gmail.com') {
+            return 
+        }
+        if (allowControl) {
+            return (
+                <button onClick={() => setAllowControl(0)} className=' shadow-purple-400 rounded text-white  bg-purple-700 p-3'>
+                    <FaThumbsUp />
+                </button>
+            )
+        } else {
+            return (
+                <button onClick={() => setAllowControl(1)} className=' shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3'>
+                    <FaThumbsDown/>
+                </button>
+            )
+        }
+    }, [allowControl]) 
+
+    let cameraToggle = useMemo(() => {
+        if (!cameraMuted) {
+            return (
+                <button id='btn-cam' className={` shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3`}>
+                    <FaCamera/>
+                </button>
+            )
+        } else {
+            return (
+                <button id='btn-cam' className=' shadow-purple-400 rounded text-white  bg-purple-700 p-3'>
+                    <FaCamera/>
+                </button>
+            )
+        }
+    }, [cameraMuted])
+
+
+    let audioToggle = useMemo(() => {
+        if (!audioMuted) {
+            return (
+                <button id='btn-audio' className={` shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3`}>
+                    <FaMicrophone/>
+                </button>
+            )
+        } else {
+            return (
+                <button id='btn-audio' className=' shadow-purple-400 rounded text-white  bg-purple-700 p-3'>
+                    <FaMicrophone/>
+                </button>
+            )
+        }
+    }, [audioMuted])
     
    if(user) {
         return (
-            <div className='container mx-auto px-4 font-mono'>
-                <div className='flex gap-2 justify-center' id='videos'>
-                    {/* <video className='rounded w-1/3 h-50 bg-purple-300' id='user-1' autoPlay playsInline></video>
-                    <video className='rounded w-1/3 h-50 bg-purple-300 hidden' id='user-2' autoPlay playsInline></video> */}
+            <div className=' font-mono h-full'>
+
+                <div className='border-b-2  bg-purple-100 border-purple-600 mb-5' id="spotlight">
                     
                 </div>
 
-                <div className='fixed bottom-3 inset-x-1/2 mx-auto  flex gap-2 justify-center'>
-                    <button onClick={changeAudio} className='bg-purple-500 rounded p-3 text-purple-100 '>
-                        {
-                            audioState
-                        }
-                    </button>
+                <div className='flex gap-2 justify-center' id='videos'>
+                </div>
+                
 
-                    <button onClick={changeCamera} className={`${camera ? 'bg-red-500' : 'bg-purple-500'} rounded p-3 text-purple-100 `}>
-                        <FaCamera/>
-                    </button>
+                <div className='fixed bottom-3 inset-x-1/2 mx-auto  flex gap-2 justify-center'>
+                    { audioToggle }
+
+                    { cameraToggle }
+
+                    { spotlightToggle }
+
+                    { allowAllSpotlightControl }
+
+                    { shareScreenToggle }
                 </div>
             </div>
         )
