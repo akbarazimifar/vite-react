@@ -13,14 +13,14 @@ const login = async (user) => {
 }
 
 const getUserByUsername = async (user) => {
-    const result = await axios.get(`${userApi}/${user.username}`, {
+    const result = await axios.get(`${userApi}/username?username=${user.username}`, {
         headers: headers(user.token)
     })
     return result.data
 }
 
 const getUserByUID = async (user) => {
-    const result = await axios.get(`${userApi}/uid/${user.uid}`, {
+    const result = await axios.get(`${userApi}/uid?uid=${user.uid}`, {
         headers: headers(user.token)
     })
     return result.data
