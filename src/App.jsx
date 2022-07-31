@@ -10,7 +10,7 @@ import Room from './pages/lobby/room'
 
 // Store
 import { useSelector, useDispatch } from 'react-redux'
-import { setMessage, logout } from './features/user/userSlice'
+import { setProps, logout } from './features/user/userSlice'
 
 //Layout
 import UserHeader from './components/layout/userHeader'
@@ -20,24 +20,35 @@ function App() {
   
   const userState = useSelector(state => state.user)
   const {
-      isLoading,
-      message,
-      user
+      globalSuccessMessage,
+      globalErrorMessage,
+      user,
   } = userState
 
 
   const dispatch = useDispatch()
   
-  let newMessage = useMemo(() => {
-    if(message) {
-      setTimeout(() => dispatch(setMessage("")), 4000)
+  let errorMessage = useMemo(() => {
+    if(globalErrorMessage) {
+      setTimeout(() => dispatch(setProps({...userState, globalErrorMessage:''})), 4000)
       return (
         <div className="border-4 border-red-500 bg-red-200 white rounded text-red-500 p-5 w-1/2 mx-auto">
-          {message}
+          {globalErrorMessage}
         </div>
       )
     }
-  }, [message])
+  }, [globalErrorMessage])
+
+  let successMessage = useMemo(() => {
+    if(globalSuccessMessage) {
+      setTimeout(() => dispatch(setProps({...userState, globalSuccessMessage:''})), 4000)
+      return (
+        <div className="border-4 border-green-500 bg-green-200 rounded text-green-500 p-5 w-1/2 mx-auto">
+          {globalSuccessMessage}
+        </div>
+      )
+    }
+  }, [globalSuccessMessage])
 
 
   const logoutNow = useCallback(() => {
@@ -59,7 +70,8 @@ function App() {
           <Route path='/lobby/room' element={<Room/>}></Route>
         </Routes>
       </Router>
-      {newMessage}
+      {successMessage}
+      {errorMessage}
     </div>
   )
 }

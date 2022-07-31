@@ -3,23 +3,32 @@ import userService from './userService'
 
 
 //Get user if loggedIN
+//localStorage.setItem('user', null)
 const user = JSON.parse(localStorage.getItem('user'))
 
 //CREATE INITIAL STATE, GLOBAL VARIABLE, SAME TO VUEX
 const initialState = {
+    user: user ? user : null,
     loading: false,
     message:'',
-    user: user ? user : null,
+
+    //Global
+    globalSuccessMessage:'',
+    globalErrorMessage:'',
+    isLoadingPage:'',
+    
     //Login
     loginMessage:'',
     loginLoading:false,
+
+    //Register
+    isRegistered:false,
 }
 
 
 export const insertUser = createAsyncThunk('user/insert', async (newuser, thunkAPI) => {
     try {
-        const res = await userService.insertUser(newuser)
-        return res.data
+        return await userService.insertUser(newuser)
     } catch (err) {
         console.log(err)
         const message = (
@@ -34,8 +43,7 @@ export const insertUser = createAsyncThunk('user/insert', async (newuser, thunkA
 
 export const login = createAsyncThunk('user/login', async (user, thunkAPI) => {
     try {
-        const res = await userService.login(user)
-        return res.data
+        return await userService.login(user)
     } catch (err) {
         console.log(err)
         const message = (
@@ -47,6 +55,13 @@ export const login = createAsyncThunk('user/login', async (user, thunkAPI) => {
         return thunkAPI.rejectWithValue(message)
     }
 })
+
+
+
+
+
+
+
 
 
 
@@ -93,34 +108,31 @@ export const userSlice = createSlice({
             .addCase(insertUser.pending, (state, action) => {
                 state.loading = true
             })
-            .addCase(insertUser.fulfilled, (state, action) => {
-                console.log(action.payload)
-                state.loading = false
+            .addCase(insertUser.fulfilled, (state, { payload }) => {
+                console.log(payload)
+                state.globalSuccessMessage = payload.msg
+                state.isRegistered = true
             })
-            .addCase(insertUser.rejected, (state, action) => {
-                state.message = action.payload
-                state.loading = false
+            .addCase(insertUser.rejected, (state, { payload }) => {
+                state.globalErrorMessage = payload
+                state.isRegistered = false
             })
-
 
             //Login
             .addCase(login.pending, (state, action) => {
                 state.loginLoading = true
             })
-            .addCase(login.fulfilled, (state, action) => {
+            .addCase(login.fulfilled, (state, { payload }) => {
                 state.loginLoading = false
-                if(action.payload) {
-                    localStorage.setItem('user', JSON.stringify(action.payload))
-                    state.user = action.payload
-                    console.log(action.payload)
-                    window.location.href='/lobby'
-                }
-                
+                localStorage.setItem('user', JSON.stringify(payload))
+                state.user = payload
+                console.log(payload)
             })
-            .addCase(login.rejected, (state, action) => {
-                state.loginMessage = action.payload
+            .addCase(login.rejected, (state, { payload }) => {
+                // Payload will be direct string becase its no response from server
+                state.globalErrorMessage = payload
                 state.loginLoading = false
-                console.log(action.payload)
+                console.log(payload)
             })
     }
 })

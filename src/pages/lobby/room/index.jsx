@@ -1,14 +1,14 @@
 import React, { useCallback, useState, useEffect, useMemo } from 'react'
-import { useSelector } from 'react-redux'
+import { useSelector, useDispatch } from 'react-redux'
 import { FaThumbsUp, FaThumbsDown, FaMicrophone, FaCamera, FaMicrophoneAltSlash, FaRegTimesCircle, FaRegGrinStars} from 'react-icons/fa'
 import { MdOutlineScreenShare, MdOutlineStopScreenShare } from 'react-icons/md'
 //Agora SDK for our Realtime Connection
 import '../../../assets/agora-rtm-sdk-1.4.5'
 
-
 //Agora for Video Call
 import '../../../assets/AgoraRTC_N-4.13.0'
-import { setMessage } from '../../../features/user/userSlice'
+
+import userService from '../../../features/user/userService'
 
 // Constant vars
 // RTC
@@ -27,21 +27,31 @@ let channel
 
 function Room() {
 
+    // Redux
+    const dispatch = useDispatch()
     const userState = useSelector(state => state.user)
     const {
         user,
     } = userState
     
+    console.warn(user.token)
     
     try {
         let s = user.id
     } catch (err) {
         window.location.href = '/'
     }
+    
+
+    // My data
+    const [myData, setMydata] = useState({})
+
+    // Users data list
+    const [Users, setUsers] = useState([])
 
     // My devices
-    const [cameraMuted, setCamera] = useState(false)
-    const [audioMuted, setAudio] = useState(true)
+    let [cameraMuted, setCamera] = useState(false)
+    let [audioMuted, setAudio] = useState(true)
 
 
     // FOR AGORA VARS
@@ -62,6 +72,8 @@ function Room() {
 
     console.log("TANGINA MO REACT")
 
+
+
     let init = async () => {
         // -------- STEP 1 ---------
         //Get current room
@@ -80,7 +92,6 @@ function Room() {
             channel = await rtmClient.createChannel('chat-'+roomID)
             await channel.join()
 
-            console.error(rtmClient)
 
             //Listen to users joined
             channel.on('MemberJoined', rtmHandleUserJoined)
@@ -129,7 +140,9 @@ function Room() {
                 height:{ 
                     min: 480, ideal:1080, max: 1080
                 }
-            }
+            },
+
+            optimizationMode: "detail"
         })
 
         // Initiate my own Video container
@@ -142,51 +155,68 @@ function Room() {
 
         // Default device state
         await localTracks[1].setMuted(false)
+        setCamera(cam => (localTracks[1].muted))
+        cameraMuted = localTracks[1].muted
+
         await localTracks[0].setMuted(true)
+        setAudio(aud => (localTracks[0].muted))
+        audioMuted = localTracks[0].muted
         
         // Toggle listener
         document.getElementById('btn-cam').addEventListener('click', e => {
             changeCamera()
-            setCamera(localTracks[1].muted)
+            setCamera(cam => (localTracks[1].muted))
         })
 
         document.getElementById('btn-audio').addEventListener('click', e => {
             changeAudio()
-            setAudio(localTracks[0].muted)
+            setAudio(aud => (localTracks[0].muted))
         })
 
-        // document.getElementById('btn-screen').addEventListener('click', e => {
-        //     toggleScreen(e)
-        // })
+         
     }
 
     // Handlers
-    const handleUserPublished = async (user, mediaType) => {
+    const handleUserPublished = async (userMedia, mediaType) => {
         
         // Store the user information
-        setremoteUsers({...remoteUsers, [user.uid]: user})
+        setremoteUsers({...remoteUsers, [userMedia.uid]: user})
 
         // Accept user to the peer chat
-        await client.subscribe(user, mediaType)
+        await client.subscribe(userMedia, mediaType)
+
+        
+        
+        
+        // New user joined
+        if (!Users.find(user => user.id === userMedia.uid)) {
+            // Call getUserByUID
+            const newUser = await userService.getUserByUID({
+                ...user,
+                uid: userMedia.uid
+            })
+            newUser.isAudioMuted = !userMedia.hasAudio
+            newUser.isCameraMuted = !userMedia.hasVideo
+            setUsers(u => ([...u, newUser]))
+        }
+        
 
         // Create video container for the new user
-        addNewVideo(user.uid)
+        addNewVideo(userMedia.uid)
 
         // live stream to other need to fix
         if (mediaType === 'video') {
-            user.videoTrack.play(`user-${user.uid}`)
+            userMedia.videoTrack.play(`user-${userMedia.uid}`)
         }
 
 
         // if share screen
         if (mediaType === 'video' && isShareScreen) {
-            user.videoTrack.play(isShareScreen)
-           
+            userMedia.videoTrack.play(isShareScreen)
         }
 
-
         if (mediaType === 'audio') {
-            user.audioTrack.play()
+            userMedia.audioTrack.play()
         }
     }
 
@@ -195,6 +225,8 @@ function Room() {
         let users = remoteUsers
         delete users[user.uid]
         setremoteUsers(users)
+
+        setUsers(Users => (Users.filter(u => u.id !== user.uid)))
 
         // Delete the user video container
         document.getElementById(`user-container-${user.uid}`).remove()
@@ -303,8 +335,6 @@ function Room() {
         }
 
         if (message.type === 'close-sharescreen') { //userVideo
-            //alert("may na close")
-
             setShareScreen(null)
             isShareScreen = null
 
@@ -312,13 +342,49 @@ function Room() {
             setSpot(message.userSpot)
 
             closeShareScreenDom()
-
-            // document.getElementById(userSpot).remove()
             
         }
 
-        // set control
+        if (message.type === 'user-camera') {
+            const users = modifyCamera(message)
+            setUsers(u => ([...users]))
+        }
+
+        if (message.type === 'user-audio') {
+            const users = modifyAudio(message)
+            setUsers(u => ([...users]))
+        }
     }
+
+    const modifyCamera = useCallback((message) => {
+        const { username, camera } = message
+        console.warn(`${username} if muted ${camera}`)
+        
+        let users = [...Users]
+        users.forEach(user => {
+            if (user.username == username) {
+                user.isCameraMuted = camera
+            }
+        })
+
+        return users
+    }, [Users])
+
+
+    // NAG EEMPTY ANG USERS
+    const modifyAudio = useCallback((message) => {
+        const { username, audio } = message
+        console.warn(`${username} if muted ${audio}`)
+        let users = [...Users]
+        alert(users.length)
+        users.forEach(user => {
+            if (user.username == username) {
+                user.isAudioMuted = audio
+            }
+        })
+
+        return users
+    }, [Users])
 
     let setSpotlight = useCallback(async (e) => {
 
@@ -335,7 +401,7 @@ function Room() {
         const newMessage = JSON.stringify({
             type: 'spotlight', videoId: userVideoId,
         })
-        rtmClient.sendMessageToPeer({
+        channel.sendMessageToPeer({
             text: newMessage
         }, rtmUid)
 
@@ -346,6 +412,7 @@ function Room() {
         // ONly me can close my own spotligth
         console.log(userSpot)
         if(userSpot === `user-container-${uid}`) {
+            //alert(`Im closing my spotlight`)
             const userVideoId = userSpot
             const newMessage = JSON.stringify({
                 type: 'close-spotlight', videoId: userVideoId,
@@ -369,7 +436,7 @@ function Room() {
             return alert("Someone presenting")
         }
 
-        if(userSpot && userSpot != `user-container-${uid}`) {
+        if(userSpot && userSpot !== `user-container-${uid}`) {
             return alert("Someone presenting")
         }
 
@@ -388,18 +455,53 @@ function Room() {
 
 
     const changeAudio = async (e) => {
-        await localTracks[0].setMuted(!localTracks[0].muted)
+        const audio = !localTracks[0].muted
+        await localTracks[0].setMuted(audio)
+
+        // Change my state in my own
+        let users = [...Users]
+        users.forEach(user => {
+            if (user.username == username) {
+                user.isAudioMuted = audio
+            }
+        })
+        
+        setUsers(u => (users))
+
+        // Send what I update
+        channel.sendMessage({
+            text: JSON.stringify({
+                type:'user-audio', username: user.username, audio
+            })
+        })
     }
 
     const changeCamera = async (e) => {
-        await localTracks[1].setMuted(!localTracks[1].muted)
+        const camera = !localTracks[1].muted
+        await localTracks[1].setMuted(camera)
+
+        // Change my state in my own
+        let users = [...Users]
+        users.forEach(user => {
+            if (user.username == username) {
+                user.isCameraMuted = camera
+            }
+        })
+        setUsers(u => (users))
+
+        // Send what I update
+        channel.sendMessage({
+            text: JSON.stringify({
+                type:'user-camera', username: user.username, camera
+            })
+        })
     }
 
     let toggleScreen = async (e) => {
         
         // Start to insert Screen sharing video element
         if(userSpot && userSpot !== `user-container-${uid}`) {
-            return alert("MAG PAALAM KA MUNA")
+            return alert("Someone presenting spotlight")
         }
 
         if (isShareScreen === `user-sharescreen-${uid}`) {
@@ -413,6 +515,8 @@ function Room() {
 
             userSpot = `user-container-${uid}`
             setSpot(`user-container-${uid}`)
+
+            alert(userSpot)
 
             
             channel.sendMessage({
@@ -499,9 +603,57 @@ function Room() {
 
 
     // Loaders 
-    useEffect(() => {
-        init()
+    useEffect(() => {console.warn(userService)
+        async function loads() {
+            let result = await userService.getUserByUsername(user)
+            console.warn(result)
+
+            await init()
+
+            result.isAudioMuted = audioMuted
+            result.isCameraMuted = cameraMuted
+
+            // Insert my data
+            setUsers(e => ([result]))
+            setMydata(e => (result))
+
+            
+            // Send my data to all
+            channel.sendMessage({ 
+                text: JSON.stringify({
+                    type: 'user-join', userData: result
+                })
+            })
+            
+        }
+
+        loads()
+        
     }, []) 
+
+    useEffect(() => {
+        Users.forEach(u => {
+            let nameDom = document.getElementById(`fullname-${u.id}`)
+            if  (nameDom) {
+                nameDom.innerText = uid === u.id ? 'You' : u.username
+            }
+
+            try {
+                // Change the dom the user 
+                if (u.isAudioMuted) {
+                    // is muted
+                    document.getElementById(`user-${uid}`).classList.add('audioOn')
+                } else {
+                    document.getElementById(`user-${uid}`).classList.remove('audioOn')
+                }
+            } catch (err) {
+
+            }
+        })
+
+        console.warn(`USERS`, Users)
+    }, [Users])
+
 
     useEffect(() => {
         loadVideoEvents()
@@ -510,23 +662,25 @@ function Room() {
 
 
     // Dynamic video element
-    const addNewVideo = async (member) => {
+    const addNewVideo = useCallback(async (member) => {
+        
+        let newUser = Users.find(s => s.id === member)
         let video = document.getElementById(`user-container-${member}`)
         let videos = document.getElementById('videos')
         if (video == null) {
             videos.insertAdjacentHTML('beforeend', `
                 <div key="${member}" id="user-container-${member}" class='text-center user-video' >
-                    <div class='video-container aspect-square w-50 bg-purple-300 border-2 border-purple-700 rounded-full' id="user-${member}" >
+                    <div class='video-container aspect-square w-50 bg-purple-300 border-2  rounded-full' id="user-${member}" >
                     </div>
-                    <small class='text-sm text-purple-500'>${member == uid ? 'You' : member}</small>
+                    <small id="fullname-${member}" class='text-sm text-purple-500'>${member}</small>
                 </div>
             `)
         }
-    }
+    }, [Users])
 
-    let spotlightToggle = useMemo(() => {
-
-        if (isShareScreen) {
+    let spotlightToggle = () => {
+        
+        if (isShareScreen || userSpot !== `user-container-${uid}`) {
             return (
                 <button onClick={setMeSpot} className=' shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3'>
                     <FaRegGrinStars />
@@ -534,30 +688,13 @@ function Room() {
             )
         }
         
-        if(!userSpot) {
-            return (
-                <button onClick={setMeSpot} className=' shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3'>
-                    <FaRegGrinStars />
-                </button>
-            )
-        }
-
-        if (userSpot !== `user-container-${uid}`) {
-            return (
-                <button onClick={setMeSpot} className=' shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3'>
-                    <FaRegGrinStars />
-                </button>
-            )
-        }
-
         return (
             <button onClick={closeSpotlight} className=' shadow-purple-400 rounded text-white  bg-purple-700 p-3'>
                 <FaRegGrinStars />
             </button>
         )
        
-    }, [userSpot])
-
+    }
 
     let shareScreenToggle = useMemo(() => {
 
@@ -604,7 +741,7 @@ function Room() {
         }
     }, [allowControl]) 
 
-    let cameraToggle = useMemo(() => {
+    let cameraToggle = () => {
         if (!cameraMuted) {
             return (
                 <button id='btn-cam' className={` shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3`}>
@@ -618,23 +755,23 @@ function Room() {
                 </button>
             )
         }
-    }, [cameraMuted])
+    }
 
 
-    let audioToggle = useMemo(() => {
-        if (!audioMuted) {
-            return (
-                <button id='btn-audio' className={` shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3`}>
-                    <FaMicrophone/>
-                </button>
-            )
-        } else {
+    let audioToggle = useCallback(() => {
+        if (audioMuted) {
             return (
                 <button id='btn-audio' className=' shadow-purple-400 rounded text-white  bg-purple-700 p-3'>
                     <FaMicrophone/>
                 </button>
             )
         }
+
+        return (
+            <button id='btn-audio' className={` shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3`}>
+                <FaMicrophone/>
+            </button>
+        )
     }, [audioMuted])
     
    if(user) {
@@ -647,19 +784,24 @@ function Room() {
 
                 <div className='flex gap-2 justify-center' id='videos'>
                 </div>
+
+                <p className='text-center p-3 text-lg'>
+                    {Users.length}
+                </p>
                 
-
                 <div className='fixed bottom-3 inset-x-1/2 mx-auto  flex gap-2 justify-center'>
-                    { audioToggle }
+                    { audioToggle() }
 
-                    { cameraToggle }
+                    { cameraToggle() }
 
-                    { spotlightToggle }
+                    { spotlightToggle() }
 
                     { allowAllSpotlightControl }
 
                     { shareScreenToggle }
                 </div>
+
+                
             </div>
         )
     } else {

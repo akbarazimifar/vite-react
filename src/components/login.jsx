@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react'
 import {Link} from 'react-router-dom'
-const login = ({submitLogin}) => {
+const login = ({submitLogin, isLoading}) => {
 
     const submit = (e) => {
         e.preventDefault()
@@ -13,7 +13,7 @@ const login = ({submitLogin}) => {
     })
 
     return (
-        <form onSubmit={submit} className="border p-5 w-1/2 m-auto my-5 font-mono">
+        <form  onSubmit={submit} className={`border-4 border-purple-500 p-5 w-1/2 m-auto my-5 font-mono  ${isLoading ? 'breathing-effect' : ''}`}>
             <h1 className='text-2xl text-purple-700 font-bold'>Welcome to login</h1>
             <small className="text-gray-500">
                 Video Conference
@@ -36,4 +36,4 @@ const login = ({submitLogin}) => {
     )
 }
 
-export default login
+export default React.memo(login)
