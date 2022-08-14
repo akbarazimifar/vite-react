@@ -2,11 +2,7 @@ import React, { useCallback, useState, useEffect, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { FaThumbsUp, FaThumbsDown, FaMicrophone, FaCamera, FaSignOutAlt, FaWindowClose, FaUsers, FaRegGrinStars} from 'react-icons/fa'
 import { MdOutlineScreenShare, MdOutlineStopScreenShare } from 'react-icons/md'
-//Agora SDK for our Realtime Connection
-import '../../../assets/agora-rtm-sdk-1.4.5'
 
-//Agora for Video Call
-import '../../../assets/AgoraRTC_N-4.13.0'
 
 import userService from '../../../features/user/userService'
 import { useNavigate } from 'react-router-dom'

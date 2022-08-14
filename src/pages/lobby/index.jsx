@@ -8,7 +8,7 @@ import { setProps as roomSetProps, deleteRoomById } from '../../features/room/ro
 
 import { useNavigate } from 'react-router-dom'
 
-import '../../assets/agora-rtm-sdk-1.4.5'
+
 import { roomSlice } from '../../features/room/roomSlice'
 
 let rtmClient, channel
