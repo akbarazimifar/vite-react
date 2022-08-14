@@ -4,3 +4,4 @@ const baseUrl = isProd ? 'https://videoconferencing-mysql.herokuapp.com' : 'http
 
 export const userApi = `${baseUrl}/api/user` 
 
+export const roomApi = `${baseUrl}/api/room`

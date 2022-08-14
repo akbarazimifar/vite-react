@@ -1,6 +1,6 @@
 import React, { useCallback, useState, useEffect, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { FaThumbsUp, FaThumbsDown, FaMicrophone, FaCamera, FaMicrophoneAltSlash, FaRegTimesCircle, FaRegGrinStars} from 'react-icons/fa'
+import { FaThumbsUp, FaThumbsDown, FaMicrophone, FaCamera, FaSignOutAlt, FaWindowClose, FaUsers, FaRegGrinStars} from 'react-icons/fa'
 import { MdOutlineScreenShare, MdOutlineStopScreenShare } from 'react-icons/md'
 //Agora SDK for our Realtime Connection
 import '../../../assets/agora-rtm-sdk-1.4.5'
@@ -9,6 +9,11 @@ import '../../../assets/agora-rtm-sdk-1.4.5'
 import '../../../assets/AgoraRTC_N-4.13.0'
 
 import userService from '../../../features/user/userService'
+import { useNavigate } from 'react-router-dom'
+import roomService from '../../../features/room/roomService'
+import { setProps } from '../../../features/user/userSlice'
+
+
 
 // Constant vars
 // RTC
@@ -19,6 +24,7 @@ let client = null
 // RTM
 let rtmClient
 let channel
+let globalChannel
 
 
 // Controls
@@ -28,6 +34,7 @@ let channel
 function Room() {
 
     // Redux
+    const navigate = useNavigate()
     const dispatch = useDispatch()
     const userState = useSelector(state => state.user)
     const {
@@ -44,10 +51,17 @@ function Room() {
     
 
     // My data
-    const [myData, setMydata] = useState({})
+    const [myData, setMydata] = useState(null)
 
-    // Users data list
+    // Room data
+    const [roomData, setRoom] = useState(null)
+
+    // Invite Data
+    const [isInvite, setInvite] = useState(false)
     const [Users, setUsers] = useState([])
+
+    // Invitation data
+    const [isInvitation, setInvitation] = useState(null)
 
     // My devices
     let [cameraMuted, setCamera] = useState(false)
@@ -64,7 +78,7 @@ function Room() {
     let [remoteUsers, setremoteUsers] = useState({})
 
     // Controls
-    let [userSpot,  setSpot] = useState()
+    let [userSpot,  setSpot] = useState(null)
     let [isShareScreen, setShareScreen] = useState(null)
 
     let [allowControl, setAllowControl] = useState(0)
@@ -80,6 +94,28 @@ function Room() {
         const params = new URLSearchParams(window.location.search)
         const roomID = params.get("id")
 
+        if (!roomID) {
+            return navigate("/lobby")
+        }
+
+        // Get room data
+        if (roomID === '123') {
+            setRoom({
+                roomName:'Global room',
+                roomID:'123',
+            })
+        } else {
+            const room = await roomService.getRoomById(roomID, user.username)
+            setRoom(room)
+
+            console.warn("ROOM DATA",room)
+            if (!room) {
+                dispatch(setProps({...userState, globalErrorMessage:"Room not exist"}))
+                return navigate('/lobby')
+            }
+        }
+        
+        
         // RTM Instance
         const rtmInstance = async () => {
             
@@ -93,6 +129,11 @@ function Room() {
             await channel.join()
 
 
+            // Room for global
+            globalChannel = await rtmClient.createChannel('global')
+            await globalChannel.join()
+
+
             //Listen to users joined
             channel.on('MemberJoined', rtmHandleUserJoined)
             
@@ -102,11 +143,19 @@ function Room() {
             // Listen to all messages from the room
             channel.on('ChannelMessage', rtmHandleMessageFromPeer)
 
+            // Listen for the invites
+            globalChannel.on('ChannelMessage', rtmGlobalMessageFromPeer)
+
+
+            
+
             window.addEventListener('beforeunload', async () => {
-                await rtmClient.logout()
-                await channel.leave()
+                alert("LOGOUT")
+                await logout()
             })
         }
+
+        
 
         // RTC Instance
         const rtcInstance = async () => {
@@ -162,71 +211,84 @@ function Room() {
         setAudio(aud => (localTracks[0].muted))
         audioMuted = localTracks[0].muted
         
-        // Toggle listener
-        document.getElementById('btn-cam').addEventListener('click', e => {
-            changeCamera()
-            setCamera(cam => (localTracks[1].muted))
-        })
-
-        document.getElementById('btn-audio').addEventListener('click', e => {
-            changeAudio()
-            setAudio(aud => (localTracks[0].muted))
-        })
-
          
     }
 
+    const logout = async () => {
+        await rtmClient.logout()
+        await channel.leave()
+    }
+
     // Handlers
-    const handleUserPublished = async (userMedia, mediaType) => {
+    const handleUserPublished = useCallback(async (userMedia, mediaType) => {
         
         // Store the user information
-        setremoteUsers({...remoteUsers, [userMedia.uid]: user})
+        // setremoteUsers({...remoteUsers, [userMedia.uid]: user})
 
         // Accept user to the peer chat
         await client.subscribe(userMedia, mediaType)
 
-        
-        
-        
-        // New user joined
-        if (!Users.find(user => user.id === userMedia.uid)) {
-            // Call getUserByUID
-            const newUser = await userService.getUserByUID({
-                ...user,
-                uid: userMedia.uid
-            })
-            newUser.isAudioMuted = !userMedia.hasAudio
-            newUser.isCameraMuted = !userMedia.hasVideo
-            setUsers(u => ([...u, newUser]))
-        }
-        
-
         // Create video container for the new user
         addNewVideo(userMedia.uid)
 
-        // live stream to other need to fix
+        const newUser = await userService.getUserByUID({
+            ...user,
+            uid: userMedia.uid
+        })
+
+        newUser.isAudioMuted = !userMedia.hasAudio
+        newUser.isCameraMuted = !userMedia.hasVideo
+        
+        setremoteUsers(Users => {
+            console.warn("USERS PUBLISH: ", Users)
+            return {...Users, [newUser.id]: newUser}
+        })
+
         if (mediaType === 'video') {
             userMedia.videoTrack.play(`user-${userMedia.uid}`)
         }
+        
 
+        setShareScreen(sharer => {
+            // if share screen
+            if (sharer && mediaType === 'video') {
 
-        // if share screen
-        if (mediaType === 'video' && isShareScreen) {
-            userMedia.videoTrack.play(isShareScreen)
-        }
+                // Ako ung naka sharescreen pero may pumasok lang na iba
+                if (`user-sharescreen-${user.id}` === sharer) {
 
+                    // ung pumasok is play naten sa loob ng videos
+                    userMedia.videoTrack.play(`user-${userMedia.uid}`)
+                    // As new joined user 
+                    channel.sendMessage({
+                        text: JSON.stringify({
+                            type: 'current-sharer', isShareScreen: sharer, to: userMedia.uid
+                        })
+                    })
+                } else {
+                    userMedia.videoTrack.play(sharer)
+                }
+
+            } 
+            return sharer
+        })
+
+        
         if (mediaType === 'audio') {
             userMedia.audioTrack.play()
         }
-    }
 
-    let handleUserLeft = async (user) => {
+
+        
+    }, [isShareScreen, userSpot, myData, remoteUsers])
+
+    let handleUserLeft = (user) => {
         // Delete the user for the participants variable
-        let users = remoteUsers
-        delete users[user.uid]
-        setremoteUsers(users)
-
-        setUsers(Users => (Users.filter(u => u.id !== user.uid)))
+        setremoteUsers(Users => {
+            let users = Users
+            delete users[user.uid]
+            return {...users}
+        })
+        
 
         // Delete the user video container
         document.getElementById(`user-container-${user.uid}`).remove()
@@ -240,7 +302,11 @@ function Room() {
     
     const rtmHandleUserLeft = async (MemberID) => {
         console.warn(`${MemberID} was left`)
+        
     }
+
+
+  
 
     //DOME ACTIONS
     const openSpotlightDom = videoId => {
@@ -259,24 +325,14 @@ function Room() {
         spotlight.appendChild(videoElement)
     }
 
-    const closeShareScreenDom = useCallback(() => {
+    const closeShareScreenDom = () => {
         let spotlight = document.getElementById('spotlight')
+        
+        // Remove element for sharescreen
         spotlight.innerHTML = ''
         spotlight.style.height = '0px !important'
-        let userVideo = document.getElementById(userSpot)
-        
-        if (!userVideo && `user-container-${uid}` !== userSpot) {
-            //alert("WALANG LAMAN: " + userSpot)'
-            let recentSharer = userSpot.split('-')
-            recentSharer = recentSharer[recentSharer.length-1]
-            addNewVideo(recentSharer)
-            
-        }  else {
-            spotlight.insertAdjacentElement('beforeend', userVideo)
-        }
-        
-        isShareScreen = null
-    }, [userSpot])
+    }
+
 
     const closeSpotLightDom = () => {
         let spotlight = document.getElementById('spotlight')
@@ -296,95 +352,147 @@ function Room() {
         
         spotlight.style.height = '50vh !important'
 
-
-        spotlight.innerHTML = `
-            <div key="${memberID}" id="user-container-${memberID}" class='text-center user-video' >
-                <div class='video-container aspect-square w-50 bg-purple-300 border-2 border-purple-700 rounded-full' id="user-sharescreen-${memberID}" >
+        if(!child) {
+            spotlight.insertAdjacentHTML('beforeend',  `
+                <div key="${memberID}" id="user-container-${memberID}" class='text-center user-video' >
+                    <div class='video-container aspect-square w-50 bg-purple-300 border-2 border-purple-700 rounded-full' id="user-sharescreen-${memberID}" >
+                    </div>
                 </div>
-            </div>
-        `
-
-            
-        userSpot = 'user-container-' + memberID
-        isShareScreen = `user-sharescreen-${memberID}`
+            `)
+        }
         
-
     }
     
-    const rtmHandleMessageFromPeer = async (message, MemberID) => {
+    const rtmHandleMessageFromPeer = useCallback( async (message, MemberID) => {
         message = JSON.parse(message.text)
         
         console.warn("MAY NAG MESSAGE ", message)
         if (message.type === 'spotlight') {
+            setSpot(i => (message.videoId))
+            userSpot = message.videoId
             openSpotlightDom(message.videoId)
         }
 
         if (message.type === 'close-spotlight') {
+            setSpot(i => (null))
+            userSpot = null
             closeSpotLightDom()
         }
 
 
         if (message.type === 'sharescreen') {
-            setShareScreen(`user-sharescreen-${message.uid}`)
+            setShareScreen(i => (`user-sharescreen-${message.uid}`))
             isShareScreen = `user-sharescreen-${message.uid}`
 
-            userSpot = `user-container-${message.uid}`
-            setSpot(`user-container-${message.uid}`)
-
+            setSpot(i => (null))
+            userSpot = null
+            // setSpot(i => (`user-container-${message.uid}`))
             setShareScreenDom(message.uid)
         }
 
         if (message.type === 'close-sharescreen') { //userVideo
-            setShareScreen(null)
-            isShareScreen = null
-
+            setSpot(i => (message.userSpot))
             userSpot = message.userSpot
-            setSpot(message.userSpot)
+            // delete sharer element
+            document.getElementById('spotlight').innerHTML = ''
 
+            setShareScreen(i => (null))
+            isShareScreen = null
+            
             closeShareScreenDom()
+            
+            // set spotlight the recent sharer
+            alert(message.userSpot)
+            let userVideo = document.getElementById(message.userSpot)
+            document.getElementById('spotlight').appendChild(userVideo)
             
         }
 
         if (message.type === 'user-camera') {
-            const users = modifyCamera(message)
-            setUsers(u => ([...users]))
+            const { id, camera } = message
+            console.warn(`${username} if muted ${audio}`)
+
+            setremoteUsers(Users => {
+                let users = Users
+
+                users[id].isCameraMuted = camera
+
+                return {...users}
+            })
         }
 
         if (message.type === 'user-audio') {
-            const users = modifyAudio(message)
-            setUsers(u => ([...users]))
+            const { id, audio } = message
+            console.warn(`${id} if muted ${audio}`)
+
+            setremoteUsers(Users => {
+                let users = Users
+
+                users[id].isAudioMuted = audio
+
+                if (users[id].isAudioMuted) {
+                    // is muted
+                    document.getElementById(`user-${id}`).classList.remove('audioOn')
+                } else {
+                    document.getElementById(`user-${id}`).classList.add('audioOn')
+                }
+                return {...users}
+            })
+            
         }
-    }
 
-    const modifyCamera = useCallback((message) => {
-        const { username, camera } = message
-        console.warn(`${username} if muted ${camera}`)
+
+        // Listen onyl for new user joined
+        if (message.to === user.id) {
+
+            if (message.type === 'current-sharer' ) {
+                alert(`CURRENT SHARER: ${message.isShareScreen}`)
+                setShareScreen(i => (message.isShareScreen))
+                isShareScreen = message.isShareScreen
+            }
+
+        }
         
-        let users = [...Users]
-        users.forEach(user => {
-            if (user.username == username) {
-                user.isCameraMuted = camera
+    }, [])
+
+
+    const rtmGlobalMessageFromPeer = useCallback( async (message, MemberID) => {
+        message = JSON.parse(message.text)
+
+        // Listen messages from users
+        if (message.to === `${user.username}-${user.id}`) {
+            if (message.type === 'listen-invite') {
+                setInvitation(inv => ({
+                    from: message.from,
+                    to: message.to,
+                    roomID: message.roomID
+                }))
             }
-        })
-
-        return users
-    }, [Users])
-
-
-    // NAG EEMPTY ANG USERS
-    const modifyAudio = useCallback((message) => {
-        const { username, audio } = message
-        console.warn(`${username} if muted ${audio}`)
-        let users = [...Users]
-        alert(users.length)
-        users.forEach(user => {
-            if (user.username == username) {
-                user.isAudioMuted = audio
+            
+            // Listen the my inivitaion declined by user
+            if (message.type === `listen-declined`) {
+                alert(`Your invitation was declined by ${message.from} `)
             }
-        })
 
-        return users
-    }, [Users])
+            if (message.type === `listen-accepted`) {
+                alert(`Your invitation was accepted by ${message.from}`)
+            }
+            
+        }
+
+
+        if (message.toArr && message.toArr.includes(user.username) ) {
+            if (message.type === 'room-deleted') {
+                alert(`Sorry, this room is now deleted by the admin`)
+                window.location.href = '/lobby'
+            }
+        }
+
+    }, [])
+
+   
+
+
 
     let setSpotlight = useCallback(async (e) => {
 
@@ -423,7 +531,7 @@ function Room() {
             })
 
             closeSpotLightDom()
-            setSpot(null)
+            setSpot(i => (null))
             console.log(userSpot)
         }
         
@@ -448,7 +556,7 @@ function Room() {
             text: newMessage
         })
 
-        setSpot(`user-container-${uid}`)
+        setSpot(i => (`user-container-${uid}`))
 
         openSpotlightDom(userVideoId)
     }, [userSpot])
@@ -458,22 +566,29 @@ function Room() {
         const audio = !localTracks[0].muted
         await localTracks[0].setMuted(audio)
 
-        // Change my state in my own
-        let users = [...Users]
-        users.forEach(user => {
-            if (user.username == username) {
-                user.isAudioMuted = audio
-            }
-        })
-        
-        setUsers(u => (users))
-
         // Send what I update
         channel.sendMessage({
             text: JSON.stringify({
-                type:'user-audio', username: user.username, audio
+                type:'user-audio', id: user.id, audio
             })
         })
+
+        // Change my state in my own
+        setremoteUsers(Users => {
+            let users = Users
+
+            users[uid].isAudioMuted = audio
+
+            if (users[uid].isAudioMuted) {
+                // is muted
+                document.getElementById(`user-${uid}`).classList.remove('audioOn')
+            } else {
+                document.getElementById(`user-${uid}`).classList.add('audioOn')
+            }
+            return {...users}
+        })
+
+        
     }
 
     const changeCamera = async (e) => {
@@ -481,56 +596,79 @@ function Room() {
         await localTracks[1].setMuted(camera)
 
         // Change my state in my own
-        let users = [...Users]
-        users.forEach(user => {
-            if (user.username == username) {
-                user.isCameraMuted = camera
-            }
+        setremoteUsers(Users => {
+            Users[user.id].isCameraMuted = camera
+            return Users
         })
-        setUsers(u => (users))
 
         // Send what I update
         channel.sendMessage({
             text: JSON.stringify({
-                type:'user-camera', username: user.username, camera
+                type:'user-camera', id: user.id, camera
             })
         })
     }
 
-    let toggleScreen = async (e) => {
+
+    // Toggle listener
+    let toggleAudio = () => {
+        changeAudio()
+        setAudio(aud => (localTracks[0].muted))
+    }
+
+    let toggleCamera = () => {
+        changeCamera()
+        setCamera(cam => (localTracks[1].muted))
+    }
+
+    
+
+    let toggleScreen = useCallback(async (e) => {
         
         // Start to insert Screen sharing video element
-        if(userSpot && userSpot !== `user-container-${uid}`) {
+
+        let userSpotligght = false
+        setSpot(spot => {
+            userSpotligght = spot
+            return spot 
+        })
+        if(userSpotligght && userSpotligght !== `user-container-${user.id}`) {
             return alert("Someone presenting spotlight")
         }
 
+        closeSpotlight()
+
         if (isShareScreen === `user-sharescreen-${uid}`) {
             //alert("mag cloclose")
-            // Close sharescreen
-            closeShareScreenDom()
-
-           
-            setShareScreen(null)
-            isShareScreen = null
-
-            userSpot = `user-container-${uid}`
-            setSpot(`user-container-${uid}`)
-
-            alert(userSpot)
 
             
             channel.sendMessage({
                 text: JSON.stringify({
                     type: 'close-sharescreen',
-                    userSpot: userSpot,
+                    userSpot: `user-container-${uid}`,
                 })
             })
+            
+            setShareScreen(i => (null))
+            isShareScreen = null
+
+            setSpot(i => (`user-container-${uid}`))
+            userSpot = `user-container-${uid}`
+
+            // Close sharescreen
+            closeShareScreenDom()
+
+            // switch me as a spotlight
+            setMeSpot()
+
 
             // Kill sharescreen
             await client.unpublish([localScreenTracks])
 
-            // Reinitiate my camera and play to all users
+            // add my own user container while share screening
             addNewVideo(uid)
+
+            // play my camera to them
             await localTracks[1].play(`user-${uid}`)
 
             // Publish my local tracks to trigger the user-published
@@ -541,58 +679,91 @@ function Room() {
         }
 
         if (!isShareScreen) {
-            //alert("mag shshare")
-            setShareScreenDom(uid)
-            
-            await client.unpublish();
-            
-            localScreenTracks = await AgoraRTC.createScreenVideoTrack()
-            localScreenTracks.play(isShareScreen)
-            
-            // Share screen and video
-            await client.publish([localScreenTracks])
 
-            setShareScreen(`user-sharescreen-${uid}`)
-            isShareScreen = `user-sharescreen-${uid}`
-
-            userSpot = `user-container-${uid}`
-            setSpot(`user-container-${uid}`)
-
+            // Message them to create my element to play my share screening
             channel.sendMessage({text: JSON.stringify({
                 type:'sharescreen', uid: uid, 
             })})
 
+            setShareScreen(i => (`user-sharescreen-${uid}`))
+            isShareScreen = `user-sharescreen-${uid}`
 
-            // Reinitiate my camera and play to all users
+            setSpot(i => (null))
+            userSpot = null
+
+            
+            // creata the share screen element to my page
+            setShareScreenDom(uid)
+
+            // Clear all sharescreen tracks
+            await client.unpublish();
+
+            // Initiate the sharescreen action
+            localScreenTracks = await AgoraRTC.createScreenVideoTrack()
+            // play and publish
+            localScreenTracks.play(`user-sharescreen-${uid}`)
+            // Share screen and video
+            await client.publish([localScreenTracks])
+            
+
+            //Reinitiate my camera and play to all users
             addNewVideo(uid)
-            await localTracks[1].play(`user-${uid}`)
+            // await localTracks[1].play(`user-${uid}`)
 
-            // Publish my local tracks to trigger the user-published
-            await client.publish([localTracks[0], localTracks[1]])
-
+            // // Publish my local tracks to trigger the user-published
+            //await client.publish([localTracks[0], localTracks[1]])
+            
+            
 
             return 
         }
+    }, [userSpot, isShareScreen])
+
+
+    const inviteNow = async (MemberID) => {
+        globalChannel.sendMessage({
+            text: JSON.stringify({
+                type: 'listen-invite', to: MemberID, from: `${user.username}-${user.id}`, roomID: roomData.roomID
+            })
+        })
+
+        setInvite(false)
     }
 
+    const declineInvite = useCallback(() => {
+        const { from, to, roomID } = isInvitation
+        globalChannel.sendMessage({
+            text: JSON.stringify({
+                type: 'listen-declined', to:from, from:`${user.username}-${user.id}`
+            })
+        })
+
+        setInvitation(null)
+    }, [isInvitation])
 
 
+    const acceptInvite = useCallback(async () => {
+        const { from, to, roomID } = isInvitation
+        globalChannel.sendMessage({
+            text: JSON.stringify({
+                type: 'listen-accepted', to:from, from:`${user.username}-${user.id}`
+            })
+        })
 
-    const switchToCamera = async (member) => {
-        console.warn('SWITCH TO CAM: ', member)
+        // Save to database
+        await roomService.addParticipants(roomID, user.username)
 
-        setCamera(false)
-        changeCamera()
-        let userVideoContainer = document.getElementById(member)
-        let spotlight = document.getElementById('spotlight')
-        spotlight.style.height = '50vh !important'
+        window.location.href = `/lobby/room?id=${roomID}`
+
         
-        spotlight.appendChild(userVideoContainer)
-        
-        await client.publish([localTracks[0], localTracks[1]])
+    }, [isInvitation])
 
+
+
+    const gotoLobby = useCallback(async () => {
         
-    }
+        window.location.href = '/lobby'
+    }, [])
 
     const loadVideoEvents = useCallback(() => {      
         let videos = document.getElementsByClassName('user-video')  
@@ -603,56 +774,46 @@ function Room() {
 
 
     // Loaders 
-    useEffect(() => {console.warn(userService)
+    useEffect(() => {
         async function loads() {
+        
+            await init()
+
             let result = await userService.getUserByUsername(user)
             console.warn(result)
 
-            await init()
-
             result.isAudioMuted = audioMuted
             result.isCameraMuted = cameraMuted
+            
 
             // Insert my data
-            setUsers(e => ([result]))
-            setMydata(e => (result))
+            setremoteUsers(Users => ({...Users, [result.id]: result}))
+            setMydata(result)
 
-            
-            // Send my data to all
+            // As new joined member, check the userspot and sharescreen
             channel.sendMessage({ 
                 text: JSON.stringify({
-                    type: 'user-join', userData: result
+                    type: 'room-state', uid: user.id
                 })
             })
+
             
         }
 
         loads()
-        
     }, []) 
 
     useEffect(() => {
-        Users.forEach(u => {
+        //alert("NABAGO ANG REMOTE USERS")
+        for (let u in remoteUsers) {
             let nameDom = document.getElementById(`fullname-${u.id}`)
             if  (nameDom) {
                 nameDom.innerText = uid === u.id ? 'You' : u.username
             }
-
-            try {
-                // Change the dom the user 
-                if (u.isAudioMuted) {
-                    // is muted
-                    document.getElementById(`user-${uid}`).classList.add('audioOn')
-                } else {
-                    document.getElementById(`user-${uid}`).classList.remove('audioOn')
-                }
-            } catch (err) {
-
-            }
-        })
-
-        console.warn(`USERS`, Users)
-    }, [Users])
+        }
+      
+        console.warn(`USERS`, remoteUsers)
+    }, [remoteUsers])
 
 
     useEffect(() => {
@@ -664,10 +825,9 @@ function Room() {
     // Dynamic video element
     const addNewVideo = useCallback(async (member) => {
         
-        let newUser = Users.find(s => s.id === member)
         let video = document.getElementById(`user-container-${member}`)
         let videos = document.getElementById('videos')
-        if (video == null) {
+        if (!video) {
             videos.insertAdjacentHTML('beforeend', `
                 <div key="${member}" id="user-container-${member}" class='text-center user-video' >
                     <div class='video-container aspect-square w-50 bg-purple-300 border-2  rounded-full' id="user-${member}" >
@@ -676,7 +836,7 @@ function Room() {
                 </div>
             `)
         }
-    }, [Users])
+    }, [remoteUsers])
 
     let spotlightToggle = () => {
         
@@ -741,38 +901,120 @@ function Room() {
         }
     }, [allowControl]) 
 
-    let cameraToggle = () => {
+    let cameraToggle = useMemo(() => {
         if (!cameraMuted) {
             return (
-                <button id='btn-cam' className={` shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3`}>
+                <button onClick={toggleCamera} className={` shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3`}>
                     <FaCamera/>
                 </button>
             )
         } else {
             return (
-                <button id='btn-cam' className=' shadow-purple-400 rounded text-white  bg-purple-700 p-3'>
+                <button onClick={toggleCamera} className=' shadow-purple-400 rounded text-white  bg-purple-700 p-3'>
                     <FaCamera/>
                 </button>
             )
         }
-    }
+    }, [cameraMuted])
 
 
-    let audioToggle = useCallback(() => {
+    let audioToggle = useMemo(() => {
         if (audioMuted) {
             return (
-                <button id='btn-audio' className=' shadow-purple-400 rounded text-white  bg-purple-700 p-3'>
+                <button onClick={toggleAudio} className=' shadow-purple-400 rounded text-white  bg-purple-700 p-3'>
                     <FaMicrophone/>
                 </button>
             )
         }
 
         return (
-            <button id='btn-audio' className={` shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3`}>
+            <button onClick={toggleAudio} className={` shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3`}>
                 <FaMicrophone/>
             </button>
         )
     }, [audioMuted])
+
+    const inivitationModal = useMemo(() => {
+        if (isInvitation) {
+            return (
+                <div className='fixed top-0 left-0 bg-purple-300/50 w-full h-full flex justify-center items-center'>
+                   <div className='bg-purple-500 p-3 rounded text-white w-1/2'>
+                        <h1 className='text-lg text-bold '>Room ({isInvitation.roomID}) Invitation from {isInvitation.from}</h1>
+
+                        <div className='flex justify-center gap-1'>
+                            <button onClick={() => declineInvite()} className='px-2 py-1 rounded bg-red-500 text-white'>
+                                DECLINE
+                            </button>
+
+                            <button onClick={() => acceptInvite()} className='px-2 py-1 rounded bg-white text-purple-700'>
+                                ACCEPT
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )
+        }
+    }, [isInvitation])
+ 
+    const inviteModal = useMemo(() => {
+        if(isInvite) {
+            return (
+                <div className='fixed top-0 left-0 bg-purple-300/50 w-full h-full flex justify-center items-center'>
+                    
+                    <button onClick={() => setInvite(false)} className='fixed top-5 right-5 rounded-full text-purple-600 text-5xl'>
+                        <FaWindowClose/>
+                    </button>
+    
+                    <div className='bg-purple-500 p-3 rounded text-white w-1/2'>
+                        Invite users | 
+                        <small> Onlines</small>
+                        <div className='h-50 border-t-2 border-white my-3 '>
+                            {
+                                Users.map(user => (<div key={user} className='bg-white text-purple-500 rounde mb-1 p-2 flex justify-between items-center'>
+                                    <span>{user.split('-')[0]}</span>
+                
+                                    <button onClick={() => inviteNow(user)} className='text-white p-1 bg-purple-500 rounded text-sm'>
+                                        INVITE
+                                    </button>
+                                </div>))
+                            }
+                        </div>
+                    </div>
+                </div>
+            )
+        }
+    }, [isInvite, Users])
+
+    useEffect(() => {
+        async function loaders() {
+            let result = await globalChannel.getMembers()
+            let currentRoomMembers = await channel.getMembers()
+            // result = result.map(user => user.split('-')[0])
+            result = result.filter(s => s.split('-')[0] !== user.username && !currentRoomMembers.includes(s))
+            
+            setUsers(i => {
+                return [...result]
+            })
+        }
+
+        if (isInvite) {
+            loaders()
+            
+        } else {
+            setUsers(i => {
+                return []
+            })
+        }
+    }, [isInvite])
+
+
+
+    let usersLength = useMemo(() => {
+        var count = 0;
+        for (var k in remoteUsers) if (remoteUsers.hasOwnProperty(k)) ++count;
+
+        return count
+    }, [remoteUsers])
     
    if(user) {
         return (
@@ -785,23 +1027,40 @@ function Room() {
                 <div className='flex gap-2 justify-center' id='videos'>
                 </div>
 
-                <p className='text-center p-3 text-lg'>
-                    {Users.length}
-                </p>
+
+                {/* <p className='text-lg text-center'>
+                    Sharing screen: {isShareScreen}
+                    <br />
+                    Spotting light: {userSpot}
+                </p> */}
+
                 
                 <div className='fixed bottom-3 inset-x-1/2 mx-auto  flex gap-2 justify-center'>
-                    { audioToggle() }
+                    { audioToggle }
 
-                    { cameraToggle() }
+                    { cameraToggle }
 
                     { spotlightToggle() }
 
                     { allowAllSpotlightControl }
 
                     { shareScreenToggle }
+
+                    {
+                        roomData && roomData.admin === user.username ? (
+                            <button onClick={() => setInvite(true)} className=' shadow-purple-400 rounded text-white  bg-purple-700 p-3'>
+                                <FaUsers/>
+                            </button>
+                        ) : null
+                    }
+
+                    <button onClick={gotoLobby} className={` shadow-red-400 rounded text-white bg-red-700 border-2 border-red-700 p-3`}>
+                        <FaSignOutAlt/>
+                    </button>
                 </div>
 
-                
+                {inviteModal}
+                {inivitationModal}
             </div>
         )
     } else {

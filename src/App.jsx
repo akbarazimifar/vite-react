@@ -10,18 +10,22 @@ import Room from './pages/lobby/room'
 
 // Store
 import { useSelector, useDispatch } from 'react-redux'
-import { setProps, logout } from './features/user/userSlice'
-
+import { setProps as userSetProps, logout } from './features/user/userSlice'
+import { setProps as roomSetProps, } from './features/room/roomSlice'
 //Layout
 import UserHeader from './components/layout/userHeader'
+import room from './pages/lobby/room'
 
 
 function App() {
-  
+  const roomState = useSelector(state => state.room)
   const userState = useSelector(state => state.user)
+
   const {
       globalSuccessMessage,
       globalErrorMessage,
+      isLoadingPage,
+      invitingMe,
       user,
   } = userState
 
@@ -29,32 +33,70 @@ function App() {
   const dispatch = useDispatch()
   
   let errorMessage = useMemo(() => {
-    if(globalErrorMessage) {
-      setTimeout(() => dispatch(setProps({...userState, globalErrorMessage:''})), 4000)
+    if(userState.globalErrorMessage || roomState.globalErrorMessage ) {
+      setTimeout(() => {
+        dispatch(userSetProps({...userState, globalErrorMessage:''}))
+        dispatch(roomSetProps({...roomState, globalErrorMessage:''}))
+      }, 4000)
       return (
         <div className="border-4 border-red-500 bg-red-200 white rounded text-red-500 p-5 w-1/2 mx-auto">
-          {globalErrorMessage}
+          {userState.globalErrorMessage || roomState.globalErrorMessage }
         </div>
       )
     }
-  }, [globalErrorMessage])
+  }, [userState.globalErrorMessage, roomState.globalErrorMessage])
 
   let successMessage = useMemo(() => {
-    if(globalSuccessMessage) {
-      setTimeout(() => dispatch(setProps({...userState, globalSuccessMessage:''})), 4000)
+    if(userState.globalSuccessMessage || roomState.globalSuccessMessage ) {
+      setTimeout(() => {
+        dispatch(userSetProps({...userState, globalSuccessMessage:''}))
+        dispatch(roomSetProps({...roomState, globalSuccessMessage:''}))
+      }, 4000)
       return (
         <div className="border-4 border-green-500 bg-green-200 rounded text-green-500 p-5 w-1/2 mx-auto">
-          {globalSuccessMessage}
+          { userState.globalSuccessMessage || roomState.globalSuccessMessage }
         </div>
       )
     }
-  }, [globalSuccessMessage])
+  }, [userState.globalSuccessMessage, roomState.globalSuccessMessage])
 
 
   const logoutNow = useCallback(() => {
       dispatch(logout())
       window.location.href='/'
   }, [])
+
+  const pageLoading = useMemo(() => {
+    if (userState.isLoadingPage || roomState.isLoadingPage) {
+      return (
+        <div className='bg-purple-500 text-white text-lg w-full h-full fixed top-0 left-0 flex justify-center items-center'>
+          {userState.isLoadingPage || roomState.isLoadingPage}
+        </div>
+      )
+    }
+  }, [userState.isLoadingPage, roomState.isLoadingPage])
+
+  const inviteElement = useMemo(() => {
+    if (invitingMe) {
+      return (
+        <div className='fixed top-0 left-0 w-full h-full flex justify-center items-center bg-purple-100/50'>
+          <div className='rounded bg-purple-500 shadow-purple-400 p-3'>
+            <p>Invitation room</p>
+
+            <div className='text-center'>
+              <button className='p-2 rounded bg-white text-purple-500'>
+                ACCEPT
+              </button>
+
+              <button className='p-2 rounded bg-red-500 text-white'>
+                DECLINE
+              </button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+  }, [invitingMe])
 
 
   return (
@@ -70,6 +112,8 @@ function App() {
           <Route path='/lobby/room' element={<Room/>}></Route>
         </Routes>
       </Router>
+      {inviteElement}
+      {pageLoading}
       {successMessage}
       {errorMessage}
     </div>

@@ -23,6 +23,9 @@ const initialState = {
 
     //Register
     isRegistered:false,
+
+    //Invite
+    invitingMe:''
 }
 
 
