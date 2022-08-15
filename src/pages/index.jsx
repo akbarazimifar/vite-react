@@ -66,7 +66,7 @@ const Home = () => {
                             
                         </div>
 
-                        <div className='rounded-lg bg-purple-600 shadow p-5 w-full h-80 bg-no-repeat bg-position-center bg-cover' style={{backgroundImage:`url('/sample2.JPG')`}}>
+                        <div className='rounded-lg bg-purple-600 shadow p-5 w-full h-80 bg-no-repeat bg-position-center bg-center bg-cover' style={{backgroundImage:`url('/sample2.JPG')`}}>
                             
                         </div>
                     </div>
