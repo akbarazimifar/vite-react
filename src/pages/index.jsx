@@ -33,8 +33,8 @@ const Home = () => {
 
     return (
         <div>
-            <div className='flex font-mono justify-center bg-gradient-to-l from-purple-800 via-violet-900 to-purple-900 text-white py-3 fixed top-0 left-0 w-full'>
-                <div className='container flex justify-between items-center'>
+            <div className=' flex font-mono justify-center bg-gradient-to-l from-purple-800 via-violet-900 to-purple-900 text-white py-3 fixed top-0 left-0 w-full'>
+                <div className=' container flex justify-between items-center'>
                     <div className='font-bold '>
                         RARACHAT
                     </div>
@@ -58,15 +58,15 @@ const Home = () => {
                 </div>
             </div>
 
-            <div className='flex justify-center my-10  h-auto' >
+            <div className='flex justify-center my-10   min-h-screen' >
                 <div className='container '>
-                    <p className='text-purple-600 font-bold'>Video Calls / Live Chat </p>
-                    <div className=' flex justify-between gap-10 h-80  relative' >
-                        <div className='rounded-lg bg-white  shadow-sm p-5 w-full bg-no-repeat bg-center bg-cover' style={{backgroundImage:`url('/sample1.JPG')`}}>
+                    <p className='xs:mx-3 text-purple-600 font-bold'>Video Calls / Live Chat </p>
+                    <div className=' flex md:flex-row flex-col justify-between gap-10  relative' >
+                        <div className='rounded-lg bg-white  shadow p-5 w-full h-80 bg-no-repeat bg-center bg-cover' style={{backgroundImage:`url('/sample1.JPG')`}}>
                             
                         </div>
 
-                        <div className='rounded-lg bg-purple-600 p-5  w-full bg-no-repeat bg-position-center bg-cover' style={{backgroundImage:`url('/sample2.JPG')`}}>
+                        <div className='rounded-lg bg-purple-600 shadow p-5 w-full h-80 bg-no-repeat bg-position-center bg-cover' style={{backgroundImage:`url('/sample2.JPG')`}}>
                             
                         </div>
                     </div>

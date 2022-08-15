@@ -211,7 +211,7 @@ function index() {
         if (isInvitation) {
             return (
                 <div className='fixed top-0 left-0 bg-purple-300/50 w-full h-full flex justify-center items-center'>
-                   <div className='bg-purple-500 p-3 rounded text-white w-1/2'>
+                   <div className='bg-purple-500 p-3 rounded text-white w-1/2 xs:w-full xs:mx-1'>
                         <h1 className='text-lg text-bold '>Room ({isInvitation.roomID}) Invitation from {isInvitation.from}</h1>
 
                         <div className='flex justify-center gap-1'>
@@ -274,9 +274,9 @@ function index() {
                 <div>
                     <h1 className='text-lg'>Join Room</h1>
                     <div className='flex items-center'>
-                        <input placeholder='Enter room name' type="text" id="roomid" className='bg-purple-100 p-1 text-purple-500'/>
+                        <input placeholder='Enter room name' type="text" id="roomid" className='bg-purple-100 p-1 text-purple-500 xs:w-full w-20'/>
                         <button onClick={joinRoom} className='text-sm px-3 py-1 bg-purple-500 text-white rounded mx-2'>JOIN</button>
-                        <button onClick={createRoom} className='text-sm px-3 py-1 bg-purple-500 text-white rounded mx-2'>CREATE</button>
+                        <button onClick={createRoom} className='text-sm  px-3 py-1 bg-purple-500 text-white rounded xs:mx-0 mx-2'>CREATE</button>
                     </div>
                 </div>
 

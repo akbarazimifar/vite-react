@@ -12,9 +12,9 @@ import userService from '../../../features/user/userService'
 import { useNavigate } from 'react-router-dom'
 import roomService from '../../../features/room/roomService'
 import { setProps } from '../../../features/user/userSlice'
-// import loadScript from '../../../hooks/loadScript'
-// import { baseUrl } from '../../../features/requests'
-// Constant vars
+
+import Chats from '../../../components/lobby/room/chats'
+
 // RTC
 let localTracks = []
 let localScreenTracks = null
@@ -137,6 +137,9 @@ function Room() {
                 uid: rtmUid, token
             })
 
+
+            await rtmClient.addOrUpdateLocalUserAttributes({'name':user.username})
+
             // Room with uniqe room ID
             channel = await rtmClient.createChannel('chat-'+roomID)
             await channel.join()
@@ -205,7 +208,7 @@ function Room() {
         })
 
         // Initiate my own Video container
-        addNewVideo(uid)
+        addNewVideo(uid, 'You')
         await localTracks[1].play(`user-${uid}`)
 
 
@@ -238,13 +241,13 @@ function Room() {
         // Accept user to the peer chat
         await client.subscribe(userMedia, mediaType)
 
-        // Create video container for the new user
-        addNewVideo(userMedia.uid)
-
         const newUser = await userService.getUserByUID({
             ...user,
             uid: userMedia.uid
         })
+        
+        //user = user.map(u => u.split('-')[0])
+        addNewVideo(userMedia.uid, newUser.lname)
 
         newUser.isAudioMuted = !userMedia.hasAudio
         newUser.isCameraMuted = !userMedia.hasVideo
@@ -307,7 +310,8 @@ function Room() {
     //RTM
 
     const rtmHandleUserJoined = async (MemberID) => {
-
+        
+        
     }
     
     const rtmHandleUserLeft = async (MemberID) => {
@@ -675,7 +679,7 @@ function Room() {
             await client.unpublish([localScreenTracks])
 
             // add my own user container while share screening
-            addNewVideo(uid)
+            addNewVideo(uid, 'You')
 
             // play my camera to them
             await localTracks[1].play(`user-${uid}`)
@@ -716,7 +720,7 @@ function Room() {
             
 
             //Reinitiate my camera and play to all users
-            addNewVideo(uid)
+            addNewVideo(uid, 'You')
             // await localTracks[1].play(`user-${uid}`)
 
             // // Publish my local tracks to trigger the user-published
@@ -832,16 +836,17 @@ function Room() {
 
 
     // Dynamic video element
-    const addNewVideo = useCallback(async (member) => {
+    const addNewVideo = useCallback(async (member, username) => {
         
         let video = document.getElementById(`user-container-${member}`)
         let videos = document.getElementById('videos')
+        
         if (!video) {
             videos.insertAdjacentHTML('beforeend', `
-                <div key="${member}" id="user-container-${member}" class='text-center user-video' >
-                    <div class='video-container aspect-square w-50 bg-purple-300 border-2  rounded-full' id="user-${member}" >
+                <div key="${member}" id="user-container-${member}" class='text-center  user-video' >
+                    <div class='video-container aspect-square w-50 bg-purple-300 border-2  rounded-full ' id="user-${member}" >
                     </div>
-                    <small id="fullname-${member}" class='text-sm text-purple-500'>${member}</small>
+                    <small id="fullname-${member}" class='text-sm text-purple-500'>${username}</small>
                 </div>
             `)
         }
@@ -947,7 +952,7 @@ function Room() {
         if (isInvitation) {
             return (
                 <div className='fixed top-0 left-0 bg-purple-300/50 w-full h-full flex justify-center items-center'>
-                   <div className='bg-purple-500 p-3 rounded text-white w-1/2'>
+                   <div className='bg-purple-500 p-3 rounded text-white w-1/2 xs:w-full xs:mx-1'>
                         <h1 className='text-lg text-bold '>Room ({isInvitation.roomID}) Invitation from {isInvitation.from}</h1>
 
                         <div className='flex justify-center gap-1'>
@@ -968,13 +973,13 @@ function Room() {
     const inviteModal = useMemo(() => {
         if(isInvite) {
             return (
-                <div className='fixed top-0 left-0 bg-purple-300/50 w-full h-full flex justify-center items-center'>
+                <div className='fixed top-0 left-0 bg-purple-300/50 w-full h-full flex justify-center items-center scroll-m-1'>
                     
                     <button onClick={() => setInvite(false)} className='fixed top-5 right-5 rounded-full text-purple-600 text-5xl'>
                         <FaWindowClose/>
                     </button>
     
-                    <div className='bg-purple-500 p-3 rounded text-white w-1/2'>
+                    <div className='bg-purple-500 p-3 rounded text-white w-1/2 xs:w-full xs:mx-1'>
                         Invite users | 
                         <small> Onlines</small>
                         <div className='h-50 border-t-2 border-white my-3 '>
@@ -1032,7 +1037,7 @@ function Room() {
                     
                 </div>
 
-                <div className='flex gap-2 justify-center' id='videos'>
+                <div className='flex gap-2 justify-center flex-wrap' id='videos'>
                 </div>
 
 
@@ -1043,7 +1048,7 @@ function Room() {
                 </p> */}
 
                 
-                <div className='fixed bottom-3 inset-x-1/2 mx-auto  flex gap-2 justify-center'>
+                <div className='fixed bottom-3 inset-x-1/2 mx-auto  flex  gap-2 justify-center'>
                     { audioToggle }
 
                     { cameraToggle }
