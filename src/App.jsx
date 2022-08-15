@@ -16,10 +16,17 @@ import { setProps as roomSetProps, } from './features/room/roomSlice'
 import UserHeader from './components/layout/userHeader'
 import room from './pages/lobby/room'
 
-
+import loadScript from './hooks/loadScript'
+import { baseUrl } from './features/requests'
 
 
 function App() {
+  // Load RTM
+  loadScript(`${baseUrl}/AgoraRTM`)
+
+  // Load RTC
+  loadScript(`${baseUrl}/AgoraRTC`)
+
   const roomState = useSelector(state => state.room)
   const userState = useSelector(state => state.user)
 

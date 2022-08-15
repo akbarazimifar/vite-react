@@ -12,8 +12,8 @@ import userService from '../../../features/user/userService'
 import { useNavigate } from 'react-router-dom'
 import roomService from '../../../features/room/roomService'
 import { setProps } from '../../../features/user/userSlice'
-import loadScript from '../../../hooks/loadScript'
-import { baseUrl } from '../../../features/requests'
+// import loadScript from '../../../hooks/loadScript'
+// import { baseUrl } from '../../../features/requests'
 // Constant vars
 // RTC
 let localTracks = []
@@ -32,11 +32,11 @@ let globalChannel
 
 function Room() {
 
-    // Load RTM
-    loadScript(`${baseUrl}/AgoraRTM`)
+    // // Load RTM
+    // loadScript(`${baseUrl}/AgoraRTM`)
 
-    // Load RTC
-    loadScript(`${baseUrl}/AgoraRTC`)
+    // // Load RTC
+    // loadScript(`${baseUrl}/AgoraRTC`)
 
     // Redux
     const navigate = useNavigate()
@@ -101,15 +101,7 @@ function Room() {
     }
 
     let init = async () => {
-        // postscribe('#roompage', '<script src="https://raw.githubusercontent.com/markaeroltomarse/vite-react/main/src/assets/agora-rtm-sdk-1.4.5.js" type="text/jsx"></script>')
-        // postscribe('#roompage', '<script src="https://raw.githubusercontent.com/markaeroltomarse/vite-react/main/src/assets/AgoraRTC_N-4.13.0.js" type="text/jsx"></script>')
 
-        // const script = document.createElement("script");
-        // script.src = "https://raw.githubusercontent.com/markaeroltomarse/vite-react/main/src/assets/agora-rtm-sdk-1.4.5.js";
-        // script.async = true;
-        // script.onload = () => this.scriptLoaded();
-
-        // document.body.appendChild(script);
         // -------- STEP 1 ---------
         //Get current room
         const params = new URLSearchParams(window.location.search)
@@ -167,8 +159,6 @@ function Room() {
             // Listen for the invites
             globalChannel.on('ChannelMessage', rtmGlobalMessageFromPeer)
 
-
-            
 
             window.addEventListener('beforeunload', async () => {
                 alert("LOGOUT")

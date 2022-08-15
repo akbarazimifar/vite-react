@@ -9,14 +9,14 @@ import { setProps as roomSetProps, deleteRoomById } from '../../features/room/ro
 import { useNavigate } from 'react-router-dom'
 
 import { roomSlice } from '../../features/room/roomSlice'
-import loadScript from '../../hooks/loadScript'
-import { baseUrl } from '../../features/requests'
+// import loadScript from '../../hooks/loadScript'
+// import { baseUrl } from '../../features/requests'
 let rtmClient, channel
 const AGORA_APP_ID = "4b3a1d46ac90441c840669b7f31417bb" 
 function index() {
 
     // Load RTM
-    loadScript(`${baseUrl}/AgoraRTM`)
+    // loadScript(`${baseUrl}/AgoraRTM`)
 
 
     const userState = useSelector(state => state.user)
