@@ -2,15 +2,18 @@ import React, { useCallback, useState, useEffect, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { FaThumbsUp, FaThumbsDown, FaMicrophone, FaCamera, FaSignOutAlt, FaWindowClose, FaUsers, FaRegGrinStars} from 'react-icons/fa'
 import { MdOutlineScreenShare, MdOutlineStopScreenShare } from 'react-icons/md'
+//Agora SDK for our Realtime Connection
+import '../../../assets/agora-rtm-sdk-1.4.5'
 
+//Agora for Video Call
+import '../../../assets/AgoraRTC_N-4.13.0'
 
 import userService from '../../../features/user/userService'
 import { useNavigate } from 'react-router-dom'
 import roomService from '../../../features/room/roomService'
 import { setProps } from '../../../features/user/userSlice'
-
-
-
+import loadScript from '../../../hooks/loadScript'
+import { baseUrl } from '../../../features/requests'
 // Constant vars
 // RTC
 let localTracks = []
@@ -29,6 +32,12 @@ let globalChannel
 
 function Room() {
 
+    // Load RTM
+    loadScript(`${baseUrl}/AgoraRTM`)
+
+    // Load RTC
+    loadScript(`${baseUrl}/AgoraRTC`)
+
     // Redux
     const navigate = useNavigate()
     const dispatch = useDispatch()
@@ -37,7 +46,6 @@ function Room() {
         user,
     } = userState
     
-    console.warn(user.token)
     
     try {
         let s = user.id
@@ -45,6 +53,7 @@ function Room() {
         window.location.href = '/'
     }
     
+    console.warn(user.token)
 
     // My data
     const [myData, setMydata] = useState(null)
@@ -82,9 +91,25 @@ function Room() {
 
     console.log("TANGINA MO REACT")
 
+    useEffect(() => {
+        
+    }, [])
 
+
+    function scriptLoaded() {
+        window.A.sort();
+    }
 
     let init = async () => {
+        // postscribe('#roompage', '<script src="https://raw.githubusercontent.com/markaeroltomarse/vite-react/main/src/assets/agora-rtm-sdk-1.4.5.js" type="text/jsx"></script>')
+        // postscribe('#roompage', '<script src="https://raw.githubusercontent.com/markaeroltomarse/vite-react/main/src/assets/AgoraRTC_N-4.13.0.js" type="text/jsx"></script>')
+
+        // const script = document.createElement("script");
+        // script.src = "https://raw.githubusercontent.com/markaeroltomarse/vite-react/main/src/assets/agora-rtm-sdk-1.4.5.js";
+        // script.async = true;
+        // script.onload = () => this.scriptLoaded();
+
+        // document.body.appendChild(script);
         // -------- STEP 1 ---------
         //Get current room
         const params = new URLSearchParams(window.location.search)
@@ -1014,8 +1039,7 @@ function Room() {
     
    if(user) {
         return (
-            <div className=' font-mono h-full'>
-
+            <div className=' font-mono h-full' id='roompage'>
                 <div className='border-b-2  bg-purple-100 border-purple-600 mb-5' id="spotlight">
                     
                 </div>

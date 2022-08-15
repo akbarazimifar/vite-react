@@ -1,8 +1,4 @@
-//Agora SDK for our Realtime Connection
-import './assets/agora-rtm-sdk-1.4.5'
 
-//Agora for Video Call
-import './assets/AgoraRTC_N-4.13.0'
 import React, { useEffect, useMemo, useCallback } from 'react'
 
 import './App.css'
@@ -107,6 +103,7 @@ function App() {
 
   return (
     <div className="App">
+      
       <Router>
         {
           user ? <UserHeader user={user} logoutNow={logoutNow}/> : ''

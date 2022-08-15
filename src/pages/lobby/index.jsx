@@ -8,12 +8,16 @@ import { setProps as roomSetProps, deleteRoomById } from '../../features/room/ro
 
 import { useNavigate } from 'react-router-dom'
 
-
 import { roomSlice } from '../../features/room/roomSlice'
-
+import loadScript from '../../hooks/loadScript'
+import { baseUrl } from '../../features/requests'
 let rtmClient, channel
 const AGORA_APP_ID = "4b3a1d46ac90441c840669b7f31417bb" 
 function index() {
+
+    // Load RTM
+    loadScript(`${baseUrl}/AgoraRTM`)
+
 
     const userState = useSelector(state => state.user)
     const roomState = useSelector(state => state.room)
@@ -112,6 +116,7 @@ function index() {
         }
     }
 
+    // Load import script AGORA
     
 
     useEffect(() => {
@@ -263,7 +268,9 @@ function index() {
 
     if(user) {
         return (
-            <div className='container mx-auto px-4 font-mono'>
+            <div className='container mx-auto px-4 font-mono' id='lobby'>
+
+
                 <div>
                     <h1 className='text-lg'>Join Room</h1>
                     <div className='flex items-center'>
