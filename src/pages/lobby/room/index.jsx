@@ -161,7 +161,6 @@ function Room() {
 
 
             window.addEventListener('beforeunload', async () => {
-                alert("LOGOUT")
                 await logout()
             })
         }
@@ -413,7 +412,7 @@ function Room() {
             closeShareScreenDom()
             
             // set spotlight the recent sharer
-            alert(message.userSpot)
+            //alert(message.userSpot)
             let userVideo = document.getElementById(message.userSpot)
             document.getElementById('spotlight').appendChild(userVideo)
             
@@ -457,7 +456,6 @@ function Room() {
         if (message.to === user.id) {
 
             if (message.type === 'current-sharer' ) {
-                alert(`CURRENT SHARER: ${message.isShareScreen}`)
                 setShareScreen(i => (message.isShareScreen))
                 isShareScreen = message.isShareScreen
             }
