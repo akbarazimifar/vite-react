@@ -13,8 +13,8 @@ const login = ({submitLogin, isLoading}) => {
     })
 
     return (
-        <form  onSubmit={submit} className={`border-4 border-purple-500 p-5 w-1/2 m-auto my-5 font-mono  ${isLoading ? 'breathing-effect' : ''}`}>
-            <h1 className='text-2xl text-purple-700 font-bold'>Welcome to login</h1>
+        <form  onSubmit={submit} className={` border-4 my-10 sm:w-1/2 md:w-1/3 xm:w-full border-purple-700 p-5 bg-white  font-mono rounded-lg ${isLoading ? 'breathing-effect' : ''}`}>
+            <h1 className='text-2xl text-purple-700 font-bold'>Login </h1>
             <small className="text-gray-500">
                 Video Conference
             </small>

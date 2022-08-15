@@ -1,7 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-html, body { height: 100%; width: 100%; margin: 0px; }
+html, body { height: 100%; width: 100%; margin: 0px; padding:0px;}
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;

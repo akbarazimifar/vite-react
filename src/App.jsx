@@ -109,8 +109,7 @@ function App() {
 
 
   return (
-    <div className="App">
-      
+    <div className="App bg-gray-50 relative py-5" style={{minHeight:'100vh'}}>
       <Router>
         {
           user ? <UserHeader user={user} logoutNow={logoutNow}/> : ''

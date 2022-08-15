@@ -23,7 +23,7 @@ const login = ({onSubmit}) => {
     })
 
     return (
-        <form onSubmit={submitRegister} className="border p-5 w-1/2 m-auto my-5 font-mono">
+        <form onSubmit={submitRegister} className="border p-5 bg-white  w-1/2 md:w-1/3 xm:w-full m-auto my-5 font-mono">
             <h1 className='text-2xl text-purple-700 font-bold'>Register Account</h1>
             <small className="text-gray-500">
                 Video Conference
