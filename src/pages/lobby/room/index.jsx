@@ -193,36 +193,59 @@ function Room() {
     }
 
     const joinStream = async () => {
+        
         // Agora ask for my device
-        localTracks = await AgoraRTC.createMicrophoneAndCameraTracks({}, {
-            encoderConfig: {
-                width: {
-                    min: 640, ideal: 1920, max: 1920
-                },
-                height:{ 
-                    min: 480, ideal:1080, max: 1080
-                }
-            },
+        let audioTrack, cameraTrack;
+        try {
+            audioTrack = await AgoraRTC.createMicrophoneAudioTrack()
+            localTracks[0] = audioTrack
+            await localTracks[0].setMuted(true)
+            setAudio(aud => (localTracks[0].muted))
+            audioMuted = localTracks[0].muted
+        } catch (err) {
+            alert('Microphone device not found')
+            setAudio(aud => (true))
+            audioMuted = true
+        }
 
-            optimizationMode: "detail"
-        })
+        try {
+            cameraTrack = await AgoraRTC.createCameraVideoTrack({
+                encoderConfig: {
+                    width: {
+                        min: 640, ideal: 1920, max: 1920
+                    },
+                    height:{ 
+                        min: 480, ideal:1080, max: 1080
+                    }
+                },
+    
+                optimizationMode: "detail"
+            })
+            localTracks[1] = cameraTrack
+            await localTracks[1].setMuted(false)
+            setCamera(cam => (localTracks[1].muted))
+            cameraMuted = localTracks[1].muted
+        } catch (err) {
+            alert("Camera device not found")
+            setCamera(cam => (true))
+            cameraMuted = true
+        }
 
         // Initiate my own Video container
         addNewVideo(uid, 'You')
-        await localTracks[1].play(`user-${uid}`)
 
+
+        if (localTracks[1]) {
+            // play it with element ID user-uid
+            await localTracks[1].play(`user-${uid}`)
+            await client.publish([localTracks[0], localTracks[1]])
+        } else {
+            await client.publish(localTracks[0])
+        }
+        
 
         // Publish my local tracks to trigger the user-published
-        await client.publish([localTracks[0], localTracks[1]])
-
-        // Default device state
-        await localTracks[1].setMuted(false)
-        setCamera(cam => (localTracks[1].muted))
-        cameraMuted = localTracks[1].muted
-
-        await localTracks[0].setMuted(true)
-        setAudio(aud => (localTracks[0].muted))
-        audioMuted = localTracks[0].muted
+        // await client.publish([localTracks[0], localTracks[1]])
         
          
     }
@@ -238,16 +261,17 @@ function Room() {
         // Store the user information
         // setremoteUsers({...remoteUsers, [userMedia.uid]: user})
 
-        // Accept user to the peer chat
-        await client.subscribe(userMedia, mediaType)
+        
 
         const newUser = await userService.getUserByUID({
             ...user,
             uid: userMedia.uid
         })
-        
         //user = user.map(u => u.split('-')[0])
         addNewVideo(userMedia.uid, newUser.lname)
+
+        // Accept user to the peer chat
+        await client.subscribe(userMedia, mediaType)
 
         newUser.isAudioMuted = !userMedia.hasAudio
         newUser.isCameraMuted = !userMedia.hasVideo
@@ -268,7 +292,7 @@ function Room() {
 
                 // Ako ung naka sharescreen pero may pumasok lang na iba
                 if (`user-sharescreen-${user.id}` === sharer) {
-
+                    
                     // ung pumasok is play naten sa loob ng videos
                     userMedia.videoTrack.play(`user-${userMedia.uid}`)
                     // As new joined user 
@@ -304,7 +328,9 @@ function Room() {
         
 
         // Delete the user video container
-        document.getElementById(`user-container-${user.uid}`).remove()
+        let userVideo = document.getElementById(`user-container-${user.uid}`)
+        if(userVideo) userVideo.remove()
+        
     }
 
     //RTM
@@ -465,6 +491,8 @@ function Room() {
             }
 
         }
+
+        
         
     }, [])
 
@@ -571,6 +599,7 @@ function Room() {
 
         setSpot(i => (`user-container-${uid}`))
 
+
         openSpotlightDom(userVideoId)
     }, [userSpot])
 
@@ -625,11 +654,17 @@ function Room() {
 
     // Toggle listener
     let toggleAudio = () => {
+        if (!localTracks[0]) {
+            return alert(`Mic device not found`)
+        }
         changeAudio()
         setAudio(aud => (localTracks[0].muted))
     }
 
     let toggleCamera = () => {
+        if(!localTracks[1]) {
+            return alert("Camera device not found")
+        }
         changeCamera()
         setCamera(cam => (localTracks[1].muted))
     }
@@ -682,10 +717,16 @@ function Room() {
             addNewVideo(uid, 'You')
 
             // play my camera to them
-            await localTracks[1].play(`user-${uid}`)
+            if (localTracks[1]) {
+                // play it with element ID user-uid
+                await localTracks[1].play(`user-${uid}`)
+                await client.publish([localTracks[0], localTracks[1]])
+            } else {
+                await client.publish(localTracks[0])
+            }
 
             // Publish my local tracks to trigger the user-published
-            await client.publish([localTracks[0], localTracks[1]])
+            //await client.publish([localTracks[0], localTracks[1]])
 
             //alert("na closed")
             return 
@@ -711,20 +752,52 @@ function Room() {
             // Clear all sharescreen tracks
             await client.unpublish();
 
-            // Initiate the sharescreen action
-            localScreenTracks = await AgoraRTC.createScreenVideoTrack()
-            // play and publish
-            localScreenTracks.play(`user-sharescreen-${uid}`)
-            // Share screen and video
-            await client.publish([localScreenTracks])
             
+            
+            
+            try {
+                // Initiate the sharescreen action
+                localScreenTracks = await AgoraRTC.createScreenVideoTrack({}, 'auto')
 
-            //Reinitiate my camera and play to all users
-            addNewVideo(uid, 'You')
-            // await localTracks[1].play(`user-${uid}`)
+                // play and publish
+                localScreenTracks.play(`user-sharescreen-${uid}`)
+                // Share screen and video
+                await client.publish([localScreenTracks])
+                await client.publish(localTracks[0])
 
-            // // Publish my local tracks to trigger the user-published
-            //await client.publish([localTracks[0], localTracks[1]])
+                //Reinitiate my camera and play to all users
+                addNewVideo(uid, 'You')
+                // await localTracks[1].play(`user-${uid}`)
+
+                // // Publish my local tracks to trigger the user-published
+                //await client.publish([localTracks[0], localTracks[1]])
+            } catch (err) {
+
+                channel.sendMessage({
+                    text: JSON.stringify({
+                        type: 'close-sharescreen',
+                        userSpot: `user-container-${uid}`,
+                    })
+                })
+                
+                setShareScreen(i => (null))
+                isShareScreen = null
+    
+                setSpot(i => (`user-container-${uid}`))
+                userSpot = `user-container-${uid}`
+    
+                // Close sharescreen
+                closeShareScreenDom()
+
+                setMeSpot()
+
+                
+                if (localTracks[1]) {
+                    client.publish(localTracks[1])
+                }
+            }   
+
+            
             
             
 
