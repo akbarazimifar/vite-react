@@ -34,7 +34,7 @@ const Home = () => {
     return (
         <div>
             <div className=' flex font-mono justify-center bg-gradient-to-l from-purple-800 via-violet-900 to-purple-900 text-white py-3 fixed top-0 left-0 w-full'>
-                <div className=' container flex justify-between items-center'>
+                <div className='z-20 container flex justify-between items-center'>
                     <div className='font-bold '>
                         RARACHAT
                     </div>
@@ -61,7 +61,7 @@ const Home = () => {
             <div className='flex justify-center my-10   min-h-screen' >
                 <div className='container '>
                     <p className='xs:mx-3 text-purple-600 font-bold'>Video Calls / Live Chat </p>
-                    <div className=' flex md:flex-row flex-col justify-between gap-10  relative' >
+                    <div className='z-0 flex md:flex-row flex-col justify-between gap-10  relative' >
                         <div className='rounded-lg bg-white  shadow p-5 w-full h-80 bg-no-repeat bg-center bg-cover' style={{backgroundImage:`url('/sample1.JPG')`}}>
                             
                         </div>

@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useEffect, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { FaThumbsUp, FaThumbsDown, FaMicrophone, FaCamera, FaSignOutAlt, FaWindowClose, FaUsers, FaRegGrinStars} from 'react-icons/fa'
-import { MdOutlineScreenShare, MdOutlineStopScreenShare } from 'react-icons/md'
+import { FaThumbsUp, FaThumbsDown, FaMicrophone, FaCamera, FaSignOutAlt, FaWindowClose, FaUsers, FaRegGrinStars } from 'react-icons/fa'
+import { MdOutlineScreenShare, MdOutlineStopScreenShare, MdOutlineChat } from 'react-icons/md'
 //Agora SDK for our Realtime Connection
 import '../../../assets/agora-rtm-sdk-1.4.5'
 
@@ -72,7 +72,9 @@ function Room() {
     let [cameraMuted, setCamera] = useState(false)
     let [audioMuted, setAudio] = useState(true)
 
-
+    // Chats state
+    const [isChats, setChats] = useState(false)
+    const [chatList, setChatList] = useState([])
     // FOR AGORA VARS
     const AGORA_APP_ID = "4b3a1d46ac90441c840669b7f31417bb" // RTC
     const RTM_ID = '4b3a1d46ac90441c840669b7f31417bb'
@@ -127,6 +129,8 @@ function Room() {
                 return navigate('/lobby')
             }
         }
+
+        
         
         
         // RTM Instance
@@ -479,6 +483,11 @@ function Room() {
                 return {...users}
             })
             
+        }
+
+
+        if (message.type === 'new-message') {
+            setChatList(chats => [...chats, message.data])
         }
 
 
@@ -867,9 +876,29 @@ function Room() {
     }, [remoteUsers])
 
 
+    const emitNewMessage = useCallback((newmessage) => {
+        newmessage.fullname = `${myData.lname}, ${myData.fname}`
+        channel.sendMessage({
+            text: JSON.stringify({
+                type: 'new-message',
+                data: newmessage
+            })
+        })
+       
+        setChatList(chats => [...chats, newmessage])
+    }, [myData, chatList])
+
+
     // Loaders 
     useEffect(() => {
         async function loads() {
+
+            // Insert first chat 
+            setChatList([...chatList, {
+                username: 'Robot',
+                message: 'Welcome to GRATATATATATCHAT!',
+                fullname: `Robot`
+            }])
         
             await init()
 
@@ -953,6 +982,10 @@ function Room() {
 
     let shareScreenToggle = useMemo(() => {
 
+        if ((/Mobi|Android/i.test(navigator.userAgent))) {
+            return
+        }
+
         if (!isShareScreen) {
             return (
                 <button onClick={toggleScreen} className=' shadow-purple-400 rounded text-purple-700 border-purple-700 border-2 p-3'>
@@ -969,6 +1002,7 @@ function Room() {
             )
         }
 
+        
         return (
             <button onClick={toggleScreen} className=' shadow-purple-400 rounded text-white border-2 border-purple-700 bg-purple-700 p-3'>
                 <MdOutlineScreenShare />
@@ -1128,6 +1162,7 @@ function Room() {
                     Spotting light: {userSpot}
                 </p> */}
 
+
                 
                 <div className='fixed bottom-3 inset-x-1/2 mx-auto  flex  gap-2 justify-center'>
                     { audioToggle }
@@ -1148,13 +1183,28 @@ function Room() {
                         ) : null
                     }
 
+
+                    <button onClick={() => setChats(true)} className={` rounded text-white bg-purple-700 border-2 border-purple-700 p-3`}>
+                        <MdOutlineChat/>
+                    </button>
+
                     <button onClick={gotoLobby} className={` shadow-red-400 rounded text-white bg-red-700 border-2 border-red-700 p-3`}>
                         <FaSignOutAlt/>
                     </button>
                 </div>
-
+                 
+                {
+                    isChats ? <Chats 
+                                    chatList={chatList} 
+                                    roomName={roomData.roomName} 
+                                    setClose={() => setChats(false)} 
+                                    username={user.username}
+                                    newMessage={emitNewMessage}
+                                    /> : null
+                }
                 {inviteModal}
                 {inivitationModal}
+                
             </div>
         )
     } else {
