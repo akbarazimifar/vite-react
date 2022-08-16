@@ -734,6 +734,11 @@ function Room() {
 
         if (!isShareScreen) {
 
+            if (/Mobi|Android/i.test(navigator.userAgent)) {
+                // mobile!
+                return alert('Sharescreen not supported at mobile device')
+            }
+
             // Message them to create my element to play my share screening
             channel.sendMessage({text: JSON.stringify({
                 type:'sharescreen', uid: uid, 
@@ -752,6 +757,9 @@ function Room() {
             // Clear all sharescreen tracks
             await client.unpublish();
 
+
+            
+            
             
             
             
