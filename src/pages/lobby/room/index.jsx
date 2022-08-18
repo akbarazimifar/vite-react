@@ -14,7 +14,8 @@ import roomService from '../../../features/room/roomService'
 import { setProps } from '../../../features/user/userSlice'
 
 import Chats from '../../../components/lobby/room/chats'
-
+let ringtone = new Audio('/ringtone.mp3')
+let ringtoneChat = new Audio('/chat.mp3')
 // RTC
 let localTracks = []
 let localScreenTracks = null
@@ -245,6 +246,11 @@ function Room() {
             await client.publish([localTracks[0], localTracks[1]])
         } else {
             await client.publish(localTracks[0])
+            channel.sendMessage({
+                text: JSON.stringify({
+                    type: 'user-joined-no-device', uid: uid
+                })
+            })
         }
         
 
@@ -341,6 +347,13 @@ function Room() {
 
     const rtmHandleUserJoined = async (MemberID) => {
         
+        if (!localTracks[1]) {
+            channel.sendMessage({
+                text: JSON.stringify({
+                    type: 'user-joined-no-device', uid: uid
+                })
+            })
+        }
         
     }
     
@@ -449,7 +462,6 @@ function Room() {
             //alert(message.userSpot)
             let userVideo = document.getElementById(message.userSpot)
             document.getElementById('spotlight').appendChild(userVideo)
-            
         }
 
         if (message.type === 'user-camera') {
@@ -474,6 +486,12 @@ function Room() {
 
                 users[id].isAudioMuted = audio
 
+                // const userVideo = document.getElementById(`user-${id}`)
+
+                // if(!userVideo) {
+                //     addNewVideo(id, users[id].username)
+                // }
+
                 if (users[id].isAudioMuted) {
                     // is muted
                     document.getElementById(`user-${id}`).classList.remove('audioOn')
@@ -487,7 +505,27 @@ function Room() {
 
 
         if (message.type === 'new-message') {
+            ringtoneChat.currentTime = 0
+            ringtoneChat.play()
             setChatList(chats => [...chats, message.data])
+        }
+
+
+        if (message.type === 'user-joined-no-device') {
+            const newUser = await userService.getUserByUID({
+                ...user,
+                uid: message.uid
+            })
+
+
+            newUser.isAudioMuted = true
+            newUser.isCameraMuted = true
+            
+            setremoteUsers(Users => {
+                console.warn("USERS PUBLISH: ", Users)
+                return {...Users, [newUser.id]: newUser}
+            })
+            addNewVideo(message.uid, newUser.username)
         }
 
 
@@ -842,6 +880,7 @@ function Room() {
         })
 
         setInvitation(null)
+        ringtone.pause()
     }, [isInvitation])
 
 
@@ -1065,9 +1104,11 @@ function Room() {
 
     const inivitationModal = useMemo(() => {
         if (isInvitation) {
+            ringtone.currentTime = 0
+            ringtone.play()
             return (
                 <div className='fixed top-0 left-0 bg-purple-300/50 w-full h-full flex justify-center items-center'>
-                   <div className='bg-purple-500 p-3 rounded text-white w-1/2 xs:w-full xs:mx-1'>
+                   <div className='bg-purple-500 p-3 rounded text-white w-1/2 sm:w-1/2 md:w-1/3 xs:w-full xs:mx-1'>
                         <h1 className='text-lg text-bold '>Room ({isInvitation.roomID}) Invitation from {isInvitation.from}</h1>
 
                         <div className='flex justify-center gap-1'>
@@ -1094,7 +1135,7 @@ function Room() {
                         <FaWindowClose/>
                     </button>
     
-                    <div className='bg-purple-500 p-3 rounded text-white w-1/2 xs:w-full xs:mx-1'>
+                    <div className='bg-purple-500 p-3 rounded text-white w-1/2 sm:w-1/2 md:w-1/3 xs:w-full xs:mx-1'>
                         Invite users | 
                         <small> Onlines</small>
                         <div className='h-50 border-t-2 border-white my-3 '>
@@ -1147,7 +1188,7 @@ function Room() {
     
    if(user) {
         return (
-            <div className=' font-mono h-full' id='roompage'>
+            <div className=' font-mono h-full my-7' id='roompage'>
                 <div className='border-b-2  bg-purple-100 border-purple-600 mb-5' id="spotlight">
                     
                 </div>
@@ -1185,6 +1226,9 @@ function Room() {
 
 
                     <button onClick={() => setChats(true)} className={` rounded text-white bg-purple-700 border-2 border-purple-700 p-3`}>
+                        <span className='float-right -mt-7 ml-2 bg-red-500 text-white rounded-full p-1 absolute text-sm'>
+                            {chatList.length}
+                        </span> 
                         <MdOutlineChat/>
                     </button>
 

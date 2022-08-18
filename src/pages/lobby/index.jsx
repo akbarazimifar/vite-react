@@ -13,11 +13,15 @@ import { roomSlice } from '../../features/room/roomSlice'
 // import { baseUrl } from '../../features/requests'
 let rtmClient, channel
 const AGORA_APP_ID = "4b3a1d46ac90441c840669b7f31417bb" 
+let ringtone = new Audio('/ringtone.mp3')
 function index() {
 
     // Load RTM
     // loadScript(`${baseUrl}/AgoraRTM`)
 
+    // Ringtone
+    
+    
 
     const userState = useSelector(state => state.user)
     const roomState = useSelector(state => state.room)
@@ -130,6 +134,8 @@ function index() {
         }
 
         loaders()
+
+        
     }, [refresh])
 
     const joinRoom = () => {
@@ -187,6 +193,7 @@ function index() {
         })
 
         setInvitation(null)
+        ringtone.pause()
     }, [isInvitation])
 
 
@@ -203,15 +210,17 @@ function index() {
 
         window.location.href = `/lobby/room?id=${roomID}`
 
-        
+
     }, [isInvitation])
 
 
     const inivitationModal = useMemo(() => {
         if (isInvitation) {
+            ringtone.currentTime = 0
+            ringtone.play()
             return (
                 <div className='fixed top-0 left-0 bg-purple-300/50 w-full h-full flex justify-center items-center'>
-                   <div className='bg-purple-500 p-3 rounded text-white w-1/2 xs:w-full xs:mx-1'>
+                   <div className='bg-purple-500 p-3 rounded text-white w-1/2 sm:w-1/2 md:w-1/3 xs:w-full xs:mx-1'>
                         <h1 className='text-lg text-bold '>Room ({isInvitation.roomID}) Invitation from {isInvitation.from}</h1>
 
                         <div className='flex justify-center gap-1'>
@@ -268,9 +277,7 @@ function index() {
 
     if(user) {
         return (
-            <div className='container mx-auto px-4 font-mono' id='lobby'>
-
-
+            <div className='container mx-auto px-4 font-mono my-20' id='lobby'>
                 <div>
                     <h1 className='text-lg'>Join Room</h1>
                     <div className='flex items-center'>
