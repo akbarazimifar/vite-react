@@ -5,6 +5,7 @@ import { MdOutlineScreenShare, MdOutlineStopScreenShare, MdOutlineChat } from 'r
 //Agora SDK for our Realtime Connection
 import '../../../assets/agora-rtm-sdk-1.4.5'
 
+
 //Agora for Video Call
 import '../../../assets/AgoraRTC_N-4.13.0'
 
@@ -1159,7 +1160,7 @@ function Room() {
         async function loaders() {
             let result = await globalChannel.getMembers()
             let currentRoomMembers = await channel.getMembers()
-            // result = result.map(user => user.split('-')[0])
+            
             result = result.filter(s => s.split('-')[0] !== user.username && !currentRoomMembers.includes(s))
             
             setUsers(i => {

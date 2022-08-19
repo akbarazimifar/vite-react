@@ -21,11 +21,11 @@ import { baseUrl } from './features/requests'
 
 
 function App() {
-  // Load RTM
-  loadScript(`${baseUrl}/AgoraRTM`)
+  // // Load RTM
+  // loadScript(`${baseUrl}/AgoraRTM`)
 
-  // Load RTC
-  loadScript(`${baseUrl}/AgoraRTC`)
+  // // Load RTC
+  // loadScript(`${baseUrl}/AgoraRTC`)
 
   const roomState = useSelector(state => state.room)
   const userState = useSelector(state => state.user)
