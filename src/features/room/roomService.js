@@ -48,6 +48,21 @@ const leaveRoom = async (roomID, username) => {
     })
     return result.data
 }
+
+
+const updateRoomState = async (room) => {
+    const result = await axios.put(`${roomApi}/state`, room, {
+        headers: headers()
+    })
+    return result.data
+}
+
+const getRoomState = async (roomID) => {
+    const result = await axios.get(`${roomApi}/state?roomID=${roomID}`, {
+        headers: headers()
+    })
+    return result.data
+}
  
 
 const headers = (token) => {
@@ -59,6 +74,8 @@ const headers = (token) => {
 
 export default {
     getMyRooms,
+    updateRoomState,
+    getRoomState,
     createRoom,
     addParticipants,
     leaveRoom,

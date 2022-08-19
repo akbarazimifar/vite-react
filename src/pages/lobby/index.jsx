@@ -4,7 +4,7 @@ import { MdPersonRemoveAlt1 } from 'react-icons/md'
 import { useDispatch, useSelector } from 'react-redux'
 import roomService from '../../features/room/roomService'
 import { setProps as userSetProps } from '../../features/user/userSlice'
-import { setProps as roomSetProps, deleteRoomById } from '../../features/room/roomSlice'
+import { setProps as roomSetProps, deleteRoomById, leaveRoom as leaveRoomReq } from '../../features/room/roomSlice'
 
 import { useNavigate } from 'react-router-dom'
 
@@ -175,7 +175,7 @@ function index() {
     }
 
     const leaveRoom = async (roomID) => {
-        await roomService.leaveRoom(roomID, user.username)
+        dispatch(leaveRoomReq({roomID, username: user.username}))
 
         setRefresh(ref => {
             ref += 1

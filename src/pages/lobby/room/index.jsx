@@ -132,8 +132,13 @@ function Room() {
             }
         }
 
+
+       
         
-        
+        // alert(JSON.stringify({
+        //     isShareScreen,
+        //     userSpot
+        // }))
         
         // RTM Instance
         const rtmInstance = async () => {
@@ -392,7 +397,7 @@ function Room() {
     }
 
 
-    const closeSpotLightDom = () => {
+    const closeSpotLightDom = async () => {
         let spotlight = document.getElementById('spotlight')
         let child = spotlight.firstElementChild
         if (child) {
@@ -400,6 +405,12 @@ function Room() {
         }
         spotlight.style.height = '0px !important'
         userSpot = null
+
+        await roomService.updateRoomState({
+            roomID: roomData.roomID, 
+            isShareScreen: '', 
+            userSpot: ''
+        })
     }
 
     const setShareScreenDom = (memberID) => {
@@ -649,6 +660,10 @@ function Room() {
 
 
         openSpotlightDom(userVideoId)
+
+        
+
+        
     }, [userSpot])
 
 
@@ -805,11 +820,6 @@ function Room() {
             // Clear all sharescreen tracks
             await client.unpublish();
 
-
-            
-            
-            
-            
             
             try {
                 // Initiate the sharescreen action
@@ -853,12 +863,15 @@ function Room() {
                 }
             }   
 
-            
-            
-            
-
-            return 
+                       
         }
+
+
+        await roomService.updateRoomState({
+            roomID: roomData.roomID, 
+            isShareScreen: isShareScreen ? isShareScreen : '', 
+            userSpot: userSpot ? userSpot : ''
+        }) 
     }, [userSpot, isShareScreen])
 
 
@@ -929,9 +942,36 @@ function Room() {
     }, [myData, chatList])
 
 
+    useEffect(() => {
+        async function req() {
+            
+            // let isMeSharing = isShareScreen ? isShareScreen.split('-') : []
+            // isMeSharing = isMeSharing[isMeSharing.length-1] ? isMeSharing[isMeSharing.length-1] : ''
+
+            let isMeSpotLight = userSpot ? userSpot.split('-') : []
+            isMeSpotLight = isMeSpotLight[isMeSpotLight.length-1] ? isMeSpotLight[isMeSpotLight.length-1] : ''
+            
+            
+            if (+isMeSpotLight === uid) {
+                await roomService.updateRoomState({
+                    roomID: roomData.roomID, 
+                    isShareScreen: isShareScreen ? isShareScreen : '', 
+                    userSpot: userSpot ? userSpot : ''
+                })  
+            }
+        }
+
+        req()
+    }, [isShareScreen, userSpot])
+
     // Loaders 
     useEffect(() => {
         async function loads() {
+
+            //Get current room
+            dispatch(setProps({
+                ...userState, isLoadingPage: 'Joing room please wait..'
+            }))
 
             // Insert first chat 
             setChatList([...chatList, {
@@ -939,8 +979,11 @@ function Room() {
                 message: 'Welcome to GRATATATATATCHAT!',
                 fullname: `Robot`
             }])
+
         
             await init()
+
+            
 
             let result = await userService.getUserByUsername(user)
             console.warn(result)
@@ -953,14 +996,37 @@ function Room() {
             setremoteUsers(Users => ({...Users, [result.id]: result}))
             setMydata(result)
 
-            // As new joined member, check the userspot and sharescreen
-            channel.sendMessage({ 
-                text: JSON.stringify({
-                    type: 'room-state', uid: user.id
-                })
-            })
 
-            
+
+            setTimeout(async () => {
+                //Get current room
+                const params = new URLSearchParams(window.location.search)
+                const roomID = params.get("id")
+
+                let roomState = await roomService.getRoomState(roomID)
+
+                if (roomState.isShareScreen) {
+                    setShareScreen(i => roomState.isShareScreen)
+                    isShareScreen = roomState.isShareScreen
+                    setSpot(i => '')
+        
+                    let isMeSharing = roomState.isShareScreen ? roomState.isShareScreen.split('-') : []
+                    isMeSharing = isMeSharing[isMeSharing.length-1] ? isMeSharing[isMeSharing.length-1] : ''
+                    // setSpot(i => (`user-container-${message.uid}`))
+                    setShareScreenDom(isMeSharing)
+                }
+        
+                if (!roomState.isShareScreen && roomState.userSpot) {
+                    setShareScreen(i => '')
+                    setSpot(i => roomState.userSpot)
+                    userSpot = roomState.userSpot
+                   
+                    openSpotlightDom(roomState.userSpot)
+                }
+                dispatch(setProps({
+                    ...userState, isLoadingPage: ''
+                }))
+            }, 2000)
         }
 
         loads()
@@ -1160,12 +1226,13 @@ function Room() {
         async function loaders() {
             let result = await globalChannel.getMembers()
             let currentRoomMembers = await channel.getMembers()
-            
+
             result = result.filter(s => s.split('-')[0] !== user.username && !currentRoomMembers.includes(s))
             
             setUsers(i => {
                 return [...result]
             })
+            
         }
 
         if (isInvite) {
@@ -1198,11 +1265,11 @@ function Room() {
                 </div>
 
 
-                {/* <p className='text-lg text-center'>
+                <p className='text-lg text-center'>
                     Sharing screen: {isShareScreen}
                     <br />
                     Spotting light: {userSpot}
-                </p> */}
+                </p>
 
 
                 

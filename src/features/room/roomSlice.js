@@ -25,6 +25,21 @@ export const getMyRooms = createAsyncThunk('room/get', async (user, thunkAPI) =>
     }
 })
 
+export const leaveRoom = createAsyncThunk('room/leave', async ({ roomID, username}, thunkAPI) => {
+    try {
+        return await roomService.leaveRoom(roomID, username)
+    } catch (err) {
+        console.log(err)
+        const message = (
+            err.response &&
+            err.response.data &&
+            err.response.data.message
+        ) || err.message || err.toString()
+
+        return thunkAPI.rejectWithValue(message)
+    }
+})
+
 
 export const deleteRoomById = createAsyncThunk('room/delete', async (_id, thunkAPI) => {
     try {
@@ -79,6 +94,20 @@ export const roomSlice = createSlice({
             })
             .addCase(getMyRooms.rejected, (state, { payload }) => {
                 state.globalErrorMessage = payload
+            })
+
+            // Leave Room
+            .addCase(leaveRoom.pending, (state, action) => {
+                state.isLoadingPage = 'Delete room please wait..'
+            })
+            .addCase(leaveRoom.fulfilled, (state, { payload }) => {
+                console.log(payload)
+                state.globalSuccessMessage = payload.msg
+                state.isLoadingPage = ''
+            })
+            .addCase(leaveRoom.rejected, (state, { payload }) => {
+                state.globalErrorMessage = payload
+                state.isLoadingPage = ''
             })
 
             // Delete Room
