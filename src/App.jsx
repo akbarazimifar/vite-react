@@ -1,8 +1,14 @@
 
-import React, { useEffect, useMemo, useCallback } from 'react'
+import React, { useEffect, useMemo, useCallback, useState } from 'react'
 
 import './App.css'
-import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom'
+import { 
+  BrowserRouter as Router, 
+  Routes, 
+  Route, 
+  useNavigate,
+
+} from 'react-router-dom'
 import Home from './pages/index.jsx'
 import Register from './pages/register'
 import Lobby from './pages/lobby'
@@ -26,6 +32,9 @@ function App() {
 
   // // Load RTC
   // loadScript(`${baseUrl}/AgoraRTC`)
+
+
+
 
   const roomState = useSelector(state => state.room)
   const userState = useSelector(state => state.user)

@@ -2,6 +2,7 @@ import React, { useCallback, useState, useEffect, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { FaThumbsUp, FaThumbsDown, FaMicrophone, FaCamera, FaSignOutAlt, FaWindowClose, FaUsers, FaRegGrinStars } from 'react-icons/fa'
 import { MdOutlineScreenShare, MdOutlineStopScreenShare, MdOutlineChat } from 'react-icons/md'
+import { useBeforeunload } from 'react-beforeunload'
 //Agora SDK for our Realtime Connection
 import '../../../assets/agora-rtm-sdk-1.4.5'
 
@@ -174,9 +175,7 @@ function Room() {
             globalChannel.on('ChannelMessage', rtmGlobalMessageFromPeer)
 
 
-            window.addEventListener('beforeunload', async () => {
-                await logout()
-            })
+            
         }
 
         
@@ -917,9 +916,9 @@ function Room() {
 
 
     const gotoLobby = useCallback(async () => {
-        
+        await roomService.updateRoomState({ roomID: roomData.roomID, isShareScreen: '', userSpot: ''})
         window.location.href = '/lobby'
-    }, [])
+    }, [roomData, isShareScreen, userSpot])
 
     const loadVideoEvents = useCallback(() => {      
         let videos = document.getElementsByClassName('user-video')  
@@ -997,11 +996,17 @@ function Room() {
             setMydata(result)
 
 
-
+            
             setTimeout(async () => {
                 //Get current room
                 const params = new URLSearchParams(window.location.search)
                 const roomID = params.get("id")
+
+                if (roomID === '123') {
+                    return dispatch(setProps({
+                        ...userState, isLoadingPage: ''
+                    }))
+                }
 
                 let roomState = await roomService.getRoomState(roomID)
 
@@ -1030,7 +1035,17 @@ function Room() {
         }
 
         loads()
+
+        
+       
     }, []) 
+
+    useBeforeunload(async (event) => {
+        alert('leaving')
+        await logout()
+    });
+
+    
 
     useEffect(() => {
         //alert("NABAGO ANG REMOTE USERS")
